@@ -1,3 +1,62 @@
+# Taiwan TradingAgents — 第一階段資料擴充
+
+本分支保留 TradingAgents 的美股分析功能，新增獨立台股資料 Provider。
+**台股預設入口不使用 LLM、不呼叫付費 LLM API、不下單。**
+目前以官方 commit `1394a3f72aa4393e1a98f51b382434c4b4c2d972` 開發；
+已確認使用者 Fork `wei0223/taiwan-tradingagents` 的 main 與此 SHA 一致；
+在 `feature/taiwan-market-provider` 分支開發。
+
+- [A. 實際程式架構與風險盤點](docs/taiwan/architecture-audit.md)
+- [B. 台股模組設計](docs/taiwan/module-design.md)
+- [測試結果與尚未實作項目](docs/taiwan/validation.md)
+
+## 不使用 LLM 的台股資料入口
+
+Python 3.11+。資料入口只需原版相依套件中的 python-dotenv 與 requests：
+
+```shell
+python -m pip install python-dotenv requests
+python -m tradingagents.dataflows.taiwan --symbol 2330 --start 2023-01-01 --as-of 2026-10-13 --output reports/2330.json
+python -m tradingagents.dataflows.taiwan --symbol 3017 --start 2023-01-01 --as-of 2026-10-13 --output reports/3017.json
+python -m tradingagents.dataflows.taiwan --symbol 3231 --start 2023-01-01 --as-of 2026-10-13 --output reports/3231.json
+```
+
+選擇性將 FinMind Token 設定在 `FINMIND_TOKEN` 環境變數；不需要在程式碼或 Git
+中寫入金鑰。本工具不登入、購買方案或自動開通 API。API 權限／額度不足會報 unavailable。
+CLI exit code：0 全部資料集成功、1 有缺資料但已匯出、2 輸入或供應商錯誤。
+原版下方的 `tradingagents` CLI 仍使用原版模型預設；台股無 LLM 使用者請使用上方入口。
+
+支援 bare 台股代碼與 `.TW`／`.TWO`，依 FinMind metadata 識別上市／上櫃，
+不猜未知代碼。匯出每日 OHLCV 原始列及其日期、來源、更新時間，程式計算 MA、
+RSI、MACD、成交量，並支援月營收 YoY、季度 EPS QoQ/YoY、利潤率及法人統計。
+
+**公布日期防護：** FinMind 財報與營收的 `date`／`create_time` 不會被當作公布日。
+沒有可信公布日期的列仍保存 raw，但排除分析；因此預設的基本面數值可能為 unavailable。
+之後可透過 `publication_resolver(dataset, raw_row)` 注入有來源可核實的公布日 archive。
+範例测试使用 synthetic resolver，不代表已整合 MOPS。未知公布日不以法定期限補填。
+每日資料缺公布時間時保守只納入分析日前一日以前的交易資料；不是盤中分析工具。
+
+本版是資料層 MVP，尚未將台股接入完整 Agent Graph：Yahoo 快照／identity／settlement
+旁路、台股新聞、歷史市場 membership、版本化財報 archive、官方交易曆、成本／漲跌停
+及硬風控仍需後續實作。法人連續天數目前依可用價格列計算，標示 observed-only 與
+窗口截斷，尚未經官方交易曆驗證；未還原價格不適合直接解讀除權息跨期報酬。
+
+## 自動測試（完全離線）
+
+```shell
+python -m unittest discover -s tests/taiwan -v
+# 已安装完整上游 dev extras 時，也可以用上游 pytest suite：
+python -m pytest -q
+```
+
+台股測試覆蓋 2330、3017、3231、上櫃與錯誤後綴、原始資料 lineage、未知／未來公布日、
+技術及基本面算式、法人缺列／缺日／反轉、HTTP/API 錯誤與金鑰保护。fixtures 完全合成，
+不含真實股價或投資結論；測試封鎖網路，不使用付費 API。新增專用 data-only CI。
+
+---
+
+以下保留官方上游說明供美股功能參考。
+
 <p align="center">
   <img src="tradingagents/assets/tauric-logo.svg" width="60%" alt="Tauric Research">
 </p>
