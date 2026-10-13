@@ -4,7 +4,7 @@
 `1394a3f72aa4393e1a98f51b382434c4b4c2d972`，套件版本 0.6.0。
 已透過 GitHub 連接器識別並 clone 使用者 Fork `wei0223/taiwan-tradingagents`，
 其 main SHA 與上述官方版本完全相同；本文件已比對實際 Fork 程式與相依宣告。所有開發均在
-`feature/taiwan-market-provider`，未修改 main、未推送遠端。
+`feature/taiwan-market-provider`，已推送同名分支並建立 draft PR #1，未修改 main。
 
 ## 實際架構
 

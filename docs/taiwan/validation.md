@@ -1,7 +1,8 @@
 # 分階段驗證紀錄
 
 日期：2026-10-13；上游 0.6.0 / SHA 1394a3f72aa4393e1a98f51b382434c4b4c2d972。
-本機 Python 3.13.5，獨立分支 feature/taiwan-market-provider，沒有操作 main 或推送。
+本機 Python 3.13.5，獨立分支 feature/taiwan-market-provider，已推送並建立 draft PR #1，
+未修改或合併 main。
 
 ## A / B
 
@@ -21,7 +22,13 @@
 - 成功：HTTP/API failure、空資料、schema、NaN、負量、重複列、錯股票防護。
 - 成功：Token 在 Authorization header，query／匯出／例外訊息不包含 Token。
 - 成功：data-only CLI Mock JSON 匯出、缺資料 exit code、原版美股 normalize_symbol regression。
-- 成功：README 更新，新增 Python 3.11–3.14 data-only CI；遠端 CI 尚未執行。
+- 成功：README 更新，新增 Python 3.11–3.14 data-only CI；遠端台股 CI 全部通過。
+- 成功：完整上游 CI（Python 3.11、3.12、3.13、3.14 及 America/New_York）全部通過，
+  clean-install smoke 與全庫 Ruff 通過。Python 3.11 日誌：1284 passed、1 skipped、
+  1 deselected、118 subtests passed；skip 為未安裝選用 langchain_aws，integration 預設排除。
+  驗證程式 commit：9f858b6ba4eaff6a8a11bed7d5d3fd04ad64dbd5。
+  [完整 CI](https://github.com/wei0223/taiwan-tradingagents/actions/runs/38414440762)、
+  [台股 CI](https://github.com/wei0223/taiwan-tradingagents/actions/runs/38414439119)。
 
 ## 環境與失敗
 
@@ -33,7 +40,8 @@ test-deps 執行台股測試（不是修改使用者 Python）。安裝輔助檔
 第一輪 lint 發現兩個格式問題，修正後全庫 `ruff check .` 通過。
 完整上游 `python -m pytest -q` 在 conftest 的 pytest_configure 階段失敗：
 `ModuleNotFoundError: No module named 'yfinance'`（退出碼 3；未收集測試），因此完整
-上游 regression 未驗證。22 項台股 unittest 不依賴 yfinance/LangGraph，全部通過。
+本機上游 regression 未驗證；後續 GitHub CI 在乾淨環境完整安裝依賴並通過全套。
+22 項台股 unittest 不依賴 yfinance/LangGraph，本機與遠端全部通過。
 GitHub 連接完成後已 clone 使用者 Fork，main 精確匹配上述 SHA；重新驗證成果。
 
 ## 尚未實作／未驗證
@@ -46,7 +54,8 @@ GitHub 連接完成後已 clone 使用者 Fork，main 精確匹配上述 SHA；�
 - TWSE / TPEx live adapters、官方交易曆；三大法人天數是觀測窗口，不宣稱完整交易曆連續性。
 - 完整台股 Agent Graph、台股專用工具／新聞／情緒、本機 Ollama profile。
 - 台股歷史市場 identity、還原價／corporate actions、投組回測與程式化硬風控。
-- 完整上游 regression 與遠端 CI 尚未通過；不宣稱完整美股回歸已驗證。
+- 本機完整依賴安裝仍未解決；遠端完整上游 regression 已通過，但真實付費 LLM integration
+  不在驗證範圍。本次未開通或使用任何付費 API，也沒有實際下單。
 
 ## 重現
 
