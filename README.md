@@ -20,9 +20,8 @@ GitHub Actions 的 **Prepare Taiwan Sponsor research data** 只準備資料，�
 
 本分支保留 TradingAgents 的美股分析功能，新增獨立台股資料 Provider。
 **台股預設入口不使用 LLM、不呼叫付費 LLM API、不下單。**
-目前以官方 commit `1394a3f72aa4393e1a98f51b382434c4b4c2d972` 開發；
-已確認使用者 Fork `wei0223/taiwan-tradingagents` 的 main 與此 SHA 一致；
-在 `feature/taiwan-market-provider` 分支開發。
+架構盤點以上游 commit `1394a3f72aa4393e1a98f51b382434c4b4c2d972` 為基準；
+台股 Provider 及 Codex 研究入口已合併至使用者 Fork `wei0223/taiwan-tradingagents`。
 
 - [A. 實際程式架構與風險盤點](docs/taiwan/architecture-audit.md)
 - [B. 台股模組設計](docs/taiwan/module-design.md)
@@ -50,8 +49,18 @@ RSI、MACD、成交量，並支援月營收 YoY、季度 EPS QoQ/YoY、利潤率
 
 **公布日期防護：** FinMind 財報與營收的 `date`／`create_time` 不會被當作公布日。
 沒有可信公布日期的列仍保存 raw，但排除分析；因此預設的基本面數值可能為 unavailable。
-之後可透過 `publication_resolver(dataset, raw_row)` 注入有來源可核實的公布日 archive。
-範例测试使用 synthetic resolver，不代表已整合 MOPS。未知公布日不以法定期限補填。
+加入 `--mops-publications` 可從 MOPS 公告快易查取得正式申報日期／時間，保存
+原始公告、來源網址、取得時間及內容雜湊。未知公布日不以法定期限補填。
+公布時間並不能證明較晚下载的數值未曾更正，因此新數值版本僅從兩來源取得日
+（台北日期）起可用；不把今天取得的數值回填到過去的分析日。
+詳見 [公布日期與版本防護](docs/taiwan/publications.md)。
+
+```shell
+python -m tradingagents.research prepare --symbols 2330,3017,3231 --start 2025-01-01 --as-of 2026-10-14 --mops-publications --output-dir research-runs
+```
+
+`--as-of` 必須符合實際分析日期；以上為驗證日期範例。歷史分析日早於新資料取得日時，
+基本面仍明確標記缺資料，需使用當時留存的版本，不可為取得非空結果而關閉防護。
 每日資料缺公布時間時保守只納入分析日前一日以前的交易資料；不是盤中分析工具。
 
 本版是資料層 MVP，尚未將台股接入完整 Agent Graph：Yahoo 快照／identity／settlement

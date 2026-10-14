@@ -16,6 +16,10 @@ on:
         description: '分析日期 YYYY-MM-DD（不得在未來）'
         required: true
         type: string
+      mops_publications:
+        description: '取得 MOPS 正式公布時間（新數值版本僅從取得日可用）'
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -43,7 +47,13 @@ jobs:
           RESEARCH_SYMBOLS: ${{ inputs.symbols }}
           RESEARCH_START: ${{ inputs.start }}
           RESEARCH_AS_OF: ${{ inputs.as_of }}
-        run: python -m tradingagents.research prepare --require-token --output-dir research-data
+          MOPS_PUBLICATIONS: ${{ inputs.mops_publications }}
+        run: |
+          if [ "$MOPS_PUBLICATIONS" = "true" ]; then
+            python -m tradingagents.research prepare --require-token --mops-publications --output-dir research-data
+          else
+            python -m tradingagents.research prepare --require-token --output-dir research-data
+          fi
       - name: Upload data packages (no Token, no Codex credentials)
         if: always()
         uses: actions/upload-artifact@v7

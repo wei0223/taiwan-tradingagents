@@ -23,6 +23,8 @@ def main(argv=None, provider=None):
     prepare.add_argument("--as-of", default=os.getenv("RESEARCH_AS_OF"), required=not os.getenv("RESEARCH_AS_OF"))
     prepare.add_argument("--output-dir", type=Path, required=True)
     prepare.add_argument("--require-token", action="store_true")
+    prepare.add_argument("--mops-publications", action="store_true",
+                         help="Archive MOPS dates; numeric vintages usable only from capture date")
     imported = commands.add_parser("from-snapshot", help="Create a run from an already saved snapshot")
     imported.add_argument("--snapshot", type=Path, required=True)
     for name in ("from-snapshot", "status", "register-agent", "submit", "stop", "run"):
@@ -47,7 +49,13 @@ def main(argv=None, provider=None):
             symbols = [symbol.strip().upper() for symbol in symbols if symbol.strip()]
             if not symbols or len(symbols) > 10 or any(not re.fullmatch(r"\d{4,6}(\.TW|\.TWO)?", s) for s in symbols):
                 raise ValueError("Use at most ten Taiwan stock codes")
-            provider = provider or TaiwanMarketDataProvider()
+            if provider is None:
+                resolver = None
+                if args.mops_publications:
+                    from tradingagents.dataflows.taiwan.publications import MopsPublicationResolver
+
+                    resolver = MopsPublicationResolver(args.start, args.as_of)
+                provider = TaiwanMarketDataProvider(publication_resolver=resolver)
             summary = []
             for symbol in symbols:
                 try:

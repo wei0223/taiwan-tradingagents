@@ -75,6 +75,23 @@ def build_bundle(snapshot):
                 raise ValueError("Unverified availability in eligible data")
             if not record.get("source") or not record.get("retrieved_at"):
                 raise ValueError("Missing source or retrieval timestamp")
+            if record.get("publication_basis", "").startswith("MOPS ") and not record.get("publication_evidence"):
+                raise ValueError("Missing MOPS publication evidence")
+            if "publication_evidence" in record:
+                from tradingagents.dataflows.taiwan.publications import validate_publication
+
+                proof = record["publication_evidence"]
+                available = validate_publication(dataset, record["raw"], proof, record["retrieved_at"])
+                if (record.get("available_at") != available or day(available) > day(as_of)
+                        or publication != proof["published_at"]):
+                    raise ValueError("Invalid or future value-vintage availability")
+                from tradingagents.dataflows.taiwan.provider import TaiwanMarketDataProvider
+
+                period, values, units = TaiwanMarketDataProvider._normalize(dataset, record["raw"])
+                if ((record["period"], record["values"], record["units"]) != (period, values, units)
+                        or record["data_date"] != record["raw"]["date"]
+                        or record["source"] != f"FinMind:{dataset}"):
+                    raise ValueError("Normalized values disagree with archived source")
             for number in record["values"].values():
                 if isinstance(number, (float, int)) and not isinstance(number, bool) and not math.isfinite(number):
                     raise ValueError("Non-finite source value")
@@ -97,6 +114,11 @@ def build_bundle(snapshot):
             "publication_dates": sorted({r["published_at"] for r in subset if r["published_at"]}),
             "sources": sorted({r["source"] for r in subset}),
             "retrieved_at": sorted({r["retrieved_at"] for r in subset}),
+            "publication_sources": sorted({r["publication_evidence"]["source"] for r in subset
+                                            if r.get("publication_evidence")}),
+            "publication_evidence_sha256": sorted({fingerprint(r["publication_evidence"]) for r in subset
+                                                    if r.get("publication_evidence")}),
+            "value_available_dates": sorted({r["available_at"] for r in subset if r.get("available_at")}),
             "availability": "available" if value is not None else "unavailable",
         }
 
