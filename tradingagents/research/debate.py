@@ -226,7 +226,17 @@ def render(directory):
         + load_json(Path(directory) / f"{stage}.json")["responses"]) for key in item["evidence_ids"]}
     for key in sorted(cited):
         item = bundle["evidence"][key]
-        lines.append(f"| {key} | {item['path']} | {item['value']} | {item['unit']} | {item['data_end']} |")
+        value = html.escape(str(item['value'])).replace('|', '\\|').replace('\n', ' ')
+        lines.append(f"| {key} | {item['path']} | {value} | {item['unit']} | {item['data_end']} |")
+    lines += ["", "## 證據來源、公布與取得日期", ""]
+    for key in sorted(cited):
+        item = bundle["evidence"][key]
+        lines += [f"- {key}：來源 {', '.join(item['sources'])}；公布日期 {', '.join(item['publication_dates']) or '未驗證'}；"
+                  f"數值版本可用日 {', '.join(item['value_available_dates']) or '依每日資料政策'}；"
+                  f"取得时间 {', '.join(item['retrieved_at'])}"]
+        for name in ("article_urls", "publication_document_urls", "publication_evidence_sha256"):
+            for value in item.get(name, []):
+                lines.append(f"  {name}：{html.escape(value)}")
     lines += ["", "## 資料覆蓋與限制", ""]
     lines += [f"- {name}：{statuses[item['status']]}；可用列 {item['eligible_rows']}"
               for name, item in bundle["coverage"].items()]

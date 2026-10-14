@@ -25,6 +25,9 @@ def main(argv=None, provider=None):
     prepare.add_argument("--require-token", action="store_true")
     prepare.add_argument("--mops-publications", action="store_true",
                          help="Archive MOPS dates; numeric vintages usable only from capture date")
+    prepare.add_argument("--extended", action="store_true", help="Add valuation, statements, adjusted prices, news/social and official sessions")
+    prepare.add_argument("--news-days", type=int, default=3)
+    prepare.add_argument("--archive-dir", type=Path, help="Persist immutable captured versions")
     imported = commands.add_parser("from-snapshot", help="Create a run from an already saved snapshot")
     imported.add_argument("--snapshot", type=Path, required=True)
     for name in ("from-snapshot", "status", "register-agent", "submit", "stop", "run"):
@@ -38,6 +41,38 @@ def main(argv=None, provider=None):
             item.add_argument("--file", type=Path, required=True)
         elif name == "stop":
             item.add_argument("--reason", required=True)
+    archive = commands.add_parser("archive", help="Save an immutable captured snapshot")
+    archive.add_argument("--snapshot", type=Path, required=True)
+    archive.add_argument("--archive-dir", type=Path, required=True)
+    filings = commands.add_parser("filings", help="Archive current official original PDF bytes and future corrections")
+    filings.add_argument("--symbol", required=True)
+    filings.add_argument("--year", type=int, required=True)
+    filings.add_argument("--as-of", required=True)
+    filings.add_argument("--archive-dir", type=Path, required=True)
+    replay = commands.add_parser("replay", help="Prepare research only from a version captured by the analysis date")
+    replay.add_argument("--archive-dir", type=Path, required=True)
+    replay.add_argument("--symbol", required=True)
+    replay.add_argument("--as-of", required=True)
+    replay.add_argument("--run-dir", type=Path, required=True)
+    sweep = commands.add_parser("sweep", help="Prepare independent historical research cells without LLM calls")
+    sweep.add_argument("--archive-dir", type=Path, required=True)
+    sweep.add_argument("--symbols", required=True)
+    sweep.add_argument("--dates", required=True, help="Comma-separated YYYY-MM-DD dates")
+    sweep.add_argument("--output-dir", type=Path, required=True)
+    outcomes = commands.add_parser("outcomes", help="Save captured adjusted snapshots for later scoring only")
+    outcomes.add_argument("--snapshot", type=Path, action="append", required=True)
+    outcomes.add_argument("--output", type=Path, required=True)
+    audit = commands.add_parser("audit", help="Offline repeatable source-quality audit; no paid models")
+    audit.add_argument("--snapshot", type=Path, action="append", required=True)
+    audit.add_argument("--output", type=Path, required=True)
+    audit.add_argument("--require-complete", action="store_true")
+    evaluation = commands.add_parser("evaluate", help="Score completed decisions against subsequently observed adjusted outcomes")
+    evaluation.add_argument("--run-dir", type=Path, action="append", required=True)
+    evaluation.add_argument("--outcomes", type=Path, required=True)
+    evaluation.add_argument("--calendar", type=Path, required=True)
+    evaluation.add_argument("--horizon", type=int, default=20)
+    evaluation.add_argument("--benchmark", default="0050")
+    evaluation.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "prepare":
@@ -51,17 +86,28 @@ def main(argv=None, provider=None):
                 raise ValueError("Use at most ten Taiwan stock codes")
             if provider is None:
                 resolver = None
-                if args.mops_publications:
+                if args.mops_publications or args.extended:
                     from tradingagents.dataflows.taiwan.publications import MopsPublicationResolver
 
                     resolver = MopsPublicationResolver(args.start, args.as_of)
-                provider = TaiwanMarketDataProvider(publication_resolver=resolver)
+                if args.extended:
+                    from tradingagents.dataflows.taiwan.calendar import OfficialCalendarProvider
+                    from tradingagents.dataflows.taiwan.extensions import ExtendedTaiwanProvider
+
+                    provider = ExtendedTaiwanProvider(publication_resolver=resolver,
+                                                      calendar_provider=OfficialCalendarProvider(), news_days=args.news_days)
+                else:
+                    provider = TaiwanMarketDataProvider(publication_resolver=resolver)
             summary = []
             for symbol in symbols:
                 try:
                     snapshot = provider.snapshot(symbol, args.start, args.as_of)
                     reject_secret(snapshot, token)
                     bundle = build_bundle(snapshot)
+                    if args.archive_dir:
+                        from .vintages import VintageStore
+
+                        VintageStore(args.archive_dir).put(snapshot)
                     folder = args.output_dir / f"{symbol}-{args.as_of}"
                     start_run(bundle, folder)
                     # Original dates, raw excluded rows, and full provenance are kept for audit.
@@ -75,7 +121,70 @@ def main(argv=None, provider=None):
             write_json(args.output_dir / "preparation.json", {"as_of": args.as_of, "runs": summary})
             print(json.dumps(summary, ensure_ascii=False))
             return 0 if all(item["status"] == "prepared" for item in summary) else 1
-        if args.command == "from-snapshot":
+        if args.command == "filings":
+            from tradingagents.dataflows.taiwan.filings import MopsFilingArchive
+
+            check_dates(args.as_of, args.as_of)
+            archive = MopsFilingArchive(args.archive_dir)
+            path = archive.capture(args.symbol, args.year, args.as_of)
+            receipt = archive.verify(path)
+            print(json.dumps({"status": "archived", "documents": len(receipt["documents"]),
+                              "receipt_sha256": receipt["receipt_sha256"]}))
+            return 0
+        if args.command == "archive":
+            from .vintages import VintageStore
+
+            path = VintageStore(args.archive_dir).put(load_json(args.snapshot))
+            print(json.dumps({"status": "archived", "version": path.stem}))
+            return 0
+        if args.command == "sweep":
+            from .evaluation import prepare_sweep
+
+            cells = prepare_sweep(args.archive_dir, args.symbols.split(','), args.dates.split(','), args.output_dir)
+            print(json.dumps(cells, ensure_ascii=False))
+            return 0 if all(item["status"] == "ready" for item in cells) else 1
+        if args.command == "audit":
+            from .health import audit_snapshots
+
+            result = audit_snapshots([load_json(path) for path in args.snapshot])
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, result)
+            print(json.dumps({key: result[key] for key in ("ready", "incomplete", "audit_sha256")}))
+            return 1 if args.require_complete and result["incomplete"] else 0
+        if args.command == "outcomes":
+            from .evaluation import outcomes_from_snapshots
+
+            snapshots = [load_json(path) for path in args.snapshot]
+            result = outcomes_from_snapshots(snapshots)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, {"snapshots": snapshots, "summary": result})
+            print(json.dumps({"status": "saved", "symbols": sorted(result["prices"]), "analysis_inputs": False}))
+            return 0
+        if args.command == "evaluate":
+            from tradingagents.dataflows.taiwan.calendar import verify_calendar
+
+            from .evaluation import evaluate_runs, outcomes_from_snapshots
+
+            calendar = load_json(args.calendar)
+            if calendar["status"] != "ok":
+                raise ValueError("Full official calendar coverage required for evaluation")
+            sessions = verify_calendar(calendar, calendar["exchange"])
+            outcomes = outcomes_from_snapshots(load_json(args.outcomes)["snapshots"])
+            if outcomes["exchange"] != calendar["exchange"]:
+                raise ValueError("Outcome/calendar exchange mismatch")
+            result = evaluate_runs(args.run_dir, outcomes, sessions, args.horizon, args.benchmark)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, result)
+            print(json.dumps({key: result[key] for key in ("resolved", "pending", "unscored", "direction_hit_rate")}))
+            return 0
+        if args.command == "replay":
+            from .vintages import VintageStore
+
+            check_dates(args.as_of, args.as_of)
+            snapshot = VintageStore(args.archive_dir).select(args.symbol, args.as_of)
+            start_run(build_bundle(snapshot), args.run_dir)
+            write_json(args.run_dir / "snapshot.json", snapshot)
+        elif args.command == "from-snapshot":
             snapshot = load_json(args.snapshot)
             reject_secret(snapshot, os.getenv("FINMIND_TOKEN", ""))
             start_run(build_bundle(snapshot), args.run_dir)

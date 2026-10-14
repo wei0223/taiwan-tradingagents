@@ -18,8 +18,12 @@ from tradingagents.dataflows.errors import VendorUnavailableError
 from .provider import FINANCIAL, REVENUE, day
 
 TAIPEI = timezone(timedelta(hours=8))
-ITEMS = {REVENUE: "F22", FINANCIAL: "F27"}
-PATHS = {REVENUE: "/mops/web/ajax_t05st10_ifrs", FINANCIAL: "/mops/web/ajax_t164sb04"}
+CASHFLOW = "TaiwanStockCashFlowsStatement"
+BALANCE = "TaiwanStockBalanceSheet"
+ITEMS = {REVENUE: "F22", FINANCIAL: "F27", CASHFLOW: "F28", BALANCE: "F26"}
+PATHS = {REVENUE: "/mops/web/ajax_t05st10_ifrs", FINANCIAL: "/mops/web/ajax_t164sb04",
+         CASHFLOW: "/mops/web/ajax_t164sb05", BALANCE: "/mops/web/ajax_t164sb03"}
+STATEMENT_NAMES = {FINANCIAL: "綜合損益表", CASHFLOW: "現金流量表", BALANCE: "資產負債表"}
 
 
 def digest(value):
@@ -53,7 +57,7 @@ def query_date(value):
 def row_period(dataset, row):
     if dataset == REVENUE:
         return date(int(row["revenue_year"]), int(row["revenue_month"]), 1).strftime("%Y-%m")
-    if dataset == FINANCIAL:
+    if dataset in STATEMENT_NAMES:
         parsed = day(row["date"])
         if parsed.month not in (3, 6, 9, 12) or parsed.day != calendar.monthrange(parsed.year, parsed.month)[1]:
             raise ValueError("Financial period must end on quarter end")
@@ -70,7 +74,7 @@ def parse_announcement(dataset, stock_id, raw):
     published = roc_date(raw["CDATE"])
     stamp = datetime.fromisoformat(f"{published}T{raw['CTIME']}+08:00")
     pattern = (r"(\d{3})年(\d{1,2})月營業收入" if dataset == REVENUE
-               else r"(\d{3})年第([1-4])季綜合損益表")
+               else r"(\d{3})年第([1-4])季" + STATEMENT_NAMES[dataset])
     match = re.fullmatch(pattern, raw["SUBJECT"].strip())
     if not match:
         raise ValueError("Unsupported announcement subject")
