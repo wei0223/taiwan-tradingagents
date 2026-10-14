@@ -64,3 +64,26 @@ GitHub 連接完成後已 clone 使用者 Fork，main 精確匹配上述 SHA；�
 完整套件安装成功後：`python -m pytest -q`，`ruff check .`。
 
 不要為測試設定真實付費 LLM key；台股 contract tests 不需要任何 API key。
+
+## Sponsor 實際資料驗證（2026-10-14）
+
+[資料準備流程](https://github.com/wei0223/taiwan-tradingagents/actions/runs/38545775294)
+在 main 執行成功，股票 2330、起日 2025-01-01、分析日 2026-10-14。
+`--require-token` 檢查及四個資料集請求成功；沒有讀取或輸出 Secret，也沒有呼叫 LLM。
+這驗證已設定 Token 可以取得資料，未另行驗證帳號方案等級。
+
+| 資料集 | 原始筆數 | 符合分析限制筆數 | 結果 |
+| --- | ---: | ---: | --- |
+| 每日行情 | 431 | 430 | 最新可用日 2026-10-13 |
+| 法人買賣 | 2155 | 2150 | 最新可用日 2026-10-13 |
+| 財報 | 102 | 0 | 缺可信公布日期，排除 |
+| 月營收 | 22 | 0 | 缺可信公布日期，排除 |
+
+下載 artifact 的 SHA256 與 GitHub 提供的 digest 一致，保存的 bundle 與狀態雜湊一致。
+逐欄重算確認數值及來源一致，未發現憑證欄位。資料仍標記
+`requires_insufficient_data=true`，不能產生完整基本面投資結論。
+原始 Sponsor 資料未提交到公開儲存庫；artifact 僅保留一天。
+
+驗證另發現舊版證據編號依賴欄位插入順序；排序保存 snapshot 後重建會改變編號，
+但不改變數值及來源。修正為固定排序後分配編號，新增序列化往返回歸測試；
+本機台股 unittest 共 39 項通過。既有 artifact 保留原始編號與雜湊，不就地改寫。

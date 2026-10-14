@@ -34,7 +34,8 @@ def snapshot(code="2330"):
 def result(stage, bundle, opening_count=1):
     role = stage.split("_")[0] if "_" in stage else stage
     agent = "coordinator" if stage == "decision" else role + "-test"
-    evidence = next(key for key, item in bundle["evidence"].items() if item["availability"] == "available")
+    evidence = next(key for key, item in bundle["evidence"].items()
+                    if item["path"] == "prices.2024-01-31.open")
     targets = []
     if stage in {"risk", "decision"}:
         targets = [f"{name}_c{i}" for name in ("bull", "bear") for i in range(1, opening_count + 1)]
@@ -87,6 +88,12 @@ class ResearchTests(unittest.TestCase):
         self.assertNotIn("SECRET_FUTURE", json.dumps(bundle))
         self.assertEqual(next(v["value"] for v in bundle["evidence"].values()
                               if v["path"] == "technical.rsi_14"), 100)
+
+    def test_evidence_hash_stable_after_snapshot_serialization(self):
+        source = snapshot()
+        reloaded = json.loads(json.dumps(source, sort_keys=True))
+        self.assertEqual(fingerprint(build_bundle(source)), fingerprint(build_bundle(reloaded)))
+        self.assertEqual(build_bundle(source)["evidence"], build_bundle(reloaded)["evidence"])
 
     def test_future_eligible_and_unknown_publication_rejected(self):
         source = snapshot()
