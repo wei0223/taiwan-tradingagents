@@ -123,7 +123,7 @@ class FinMindClient:
 class TaiwanMarketDataProvider:
     def __init__(self, client: FinMindClient | None = None, publication_resolver=None):
         self.client = client or FinMindClient()
-        # A verified archive/MOPS adapter can supply publication dates. FinMind's
+        # A verified archive/MOPS adapter can supply publication evidence. FinMind's
         # date/create_time fields are deliberately never treated as publication.
         self.publication_resolver = publication_resolver
 
@@ -178,7 +178,16 @@ class TaiwanMarketDataProvider:
                 # prior-day observations; never mislabel the observation date as publication.
                 published = (self.publication_resolver(dataset, row)
                              if self.publication_resolver else None)
+                proof = published if isinstance(published, dict) else None
+                available_at = None
+                if proof:
+                    from .publications import validate_publication
+
+                    available_at = validate_publication(dataset, row, proof, retrieved)
+                    published = proof["published_at"]
                 basis = "injected_verified_publication_archive" if published else "unknown"
+                if proof:
+                    basis = "MOPS official announcement; numeric vintage available from capture only"
                 if dataset in {REVENUE, FINANCIAL}:
                     if not published:
                         result.warnings.append(f"{raw_date}: publication date unknown; excluded")
@@ -187,6 +196,9 @@ class TaiwanMarketDataProvider:
                         raise ValueError("publication precedes data date")
                     if day(published) > day(as_of):
                         result.warnings.append(f"{raw_date}: published after as_of; excluded")
+                        continue
+                    if available_at and day(available_at) > day(as_of):
+                        result.warnings.append(f"{raw_date}: value vintage captured after as_of; excluded")
                         continue
                 else:
                     if published:
@@ -203,12 +215,15 @@ class TaiwanMarketDataProvider:
                 if key in seen:
                     raise ValueError("duplicate observation; vintage ambiguous")
                 seen.add(key)
-                result.records.append({
+                record = {
                     "dataset": dataset, "stock_id": instrument.stock_id,
                     "data_date": raw_date, "period": period, "published_at": published,
                     "publication_basis": basis, "retrieved_at": retrieved,
                     "source": f"FinMind:{dataset}", "raw": row, "values": values, "units": units,
-                })
+                }
+                if proof:
+                    record.update(publication_evidence=proof, available_at=available_at)
+                result.records.append(record)
             except (KeyError, TypeError, ValueError, OverflowError):
                 # Any malformed/duplicate row makes the dataset unavailable. Calculations
                 # must not quietly skip bad bars or select an arbitrary financial vintage.
@@ -267,7 +282,7 @@ class TaiwanMarketDataProvider:
                                      "stock_id": instrument.stock_id, "as_of": as_of,
                                      "retrieved_at": self.client.now()}
         prices = datasets[PRICE]["records"]
-        return {
+        snapshot = {
             "schema_version": 1, "instrument": asdict(instrument), "as_of": as_of,
             "analysis_semantics": "Asia/Taipei end-of-day; daily data available next day",
             "datasets": datasets,
@@ -281,3 +296,10 @@ class TaiwanMarketDataProvider:
                             "No vintage archive; revised data is not certified point-in-time",
                             "No LLM analysis, broker orders, or portfolio simulation"],
         }
+        if hasattr(self.publication_resolver, "audit"):
+            snapshot["publication_audit"] = self.publication_resolver.audit(instrument.stock_id)
+            snapshot["limitations"].append(
+                "MOPS proves announcement timestamps, not original FinMind values; "
+                "new numeric vintages cannot be backdated before capture"
+            )
+        return snapshot

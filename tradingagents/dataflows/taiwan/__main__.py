@@ -16,9 +16,17 @@ def main(argv=None, provider=None):
     parser.add_argument("--start", required=True)
     parser.add_argument("--as-of", required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--mops-publications", action="store_true")
     args = parser.parse_args(argv)
     try:
-        result = (provider or TaiwanMarketDataProvider()).snapshot(args.symbol, args.start, args.as_of)
+        if provider is None:
+            resolver = None
+            if args.mops_publications:
+                from .publications import MopsPublicationResolver
+
+                resolver = MopsPublicationResolver(args.start, args.as_of)
+            provider = TaiwanMarketDataProvider(publication_resolver=resolver)
+        result = provider.snapshot(args.symbol, args.start, args.as_of)
     except (VendorError, ValueError) as exc:
         print(json.dumps({"status": "unavailable", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
