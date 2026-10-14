@@ -17,15 +17,24 @@ def main(argv=None, provider=None):
     parser.add_argument("--as-of", required=True)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mops-publications", action="store_true")
+    parser.add_argument("--extended", action="store_true")
+    parser.add_argument("--news-days", type=int, default=3)
     args = parser.parse_args(argv)
     try:
         if provider is None:
             resolver = None
-            if args.mops_publications:
+            if args.mops_publications or args.extended:
                 from .publications import MopsPublicationResolver
 
                 resolver = MopsPublicationResolver(args.start, args.as_of)
-            provider = TaiwanMarketDataProvider(publication_resolver=resolver)
+            if args.extended:
+                from .calendar import OfficialCalendarProvider
+                from .extensions import ExtendedTaiwanProvider
+
+                provider = ExtendedTaiwanProvider(publication_resolver=resolver,
+                                                  calendar_provider=OfficialCalendarProvider(), news_days=args.news_days)
+            else:
+                provider = TaiwanMarketDataProvider(publication_resolver=resolver)
         result = provider.snapshot(args.symbol, args.start, args.as_of)
     except (VendorError, ValueError) as exc:
         print(json.dumps({"status": "unavailable", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
@@ -36,7 +45,8 @@ def main(argv=None, provider=None):
         args.output.write_text(text + "\n", encoding="utf-8")
     else:
         print(text)
-    return 0 if all(d["status"] == "ok" for d in result["datasets"].values()) else 1
+    groups = [result["datasets"], result.get("extensions", {})]
+    return 0 if all(d["status"] == "ok" for group in groups for d in group.values()) else 1
 
 
 if __name__ == "__main__":

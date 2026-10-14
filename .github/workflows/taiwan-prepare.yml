@@ -20,6 +20,10 @@ on:
         description: '取得 MOPS 正式公布時間（新數值版本僅從取得日可用）'
         default: true
         type: boolean
+      extended:
+        description: '增補估值、現金流、資產負債、還原價、新聞社群及官方交易日'
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ jobs:
     # Secrets are only used by the trusted default branch; never PR/fork-controlled code.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,12 +52,18 @@ jobs:
           RESEARCH_START: ${{ inputs.start }}
           RESEARCH_AS_OF: ${{ inputs.as_of }}
           MOPS_PUBLICATIONS: ${{ inputs.mops_publications }}
+          EXTENDED_RESEARCH: ${{ inputs.extended }}
         run: |
-          if [ "$MOPS_PUBLICATIONS" = "true" ]; then
-            python -m tradingagents.research prepare --require-token --mops-publications --output-dir research-data
-          else
-            python -m tradingagents.research prepare --require-token --output-dir research-data
-          fi
+          options=(--require-token --output-dir research-data --archive-dir research-data/vintages)
+          if [ "$EXTENDED_RESEARCH" = "true" ]; then options+=(--extended); fi
+          if [ "$MOPS_PUBLICATIONS" = "true" ]; then options+=(--mops-publications); fi
+          python -m tradingagents.research prepare "${options[@]}"
+      - name: Audit captured evidence without credentials
+        if: steps.prepare.outcome == 'success'
+        run: |
+          options=(--output research-data/audit.json --require-complete)
+          for file in research-data/*/snapshot.json; do options+=(--snapshot "$file"); done
+          python -m tradingagents.research audit "${options[@]}"
       - name: Upload data packages (no Token, no Codex credentials)
         if: always()
         uses: actions/upload-artifact@v7

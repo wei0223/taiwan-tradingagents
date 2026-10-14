@@ -1,4 +1,4 @@
-# Taiwan TradingAgents — 第一階段資料擴充
+# Taiwan TradingAgents — 台股資料與 Codex 多 Agent 研究
 
 已新增 **Codex 原生多 Agent 研究入口**：FinMind Sponsor 資料由 GitHub Secret
 `FINMIND_TOKEN` 準備；下載資料包後，Codex 用 ChatGPT 登入主持多方／空方／風險辯論。
@@ -7,6 +7,12 @@
 
 [Codex 驗證紀錄](docs/taiwan/codex-validation.md) ·
 [合成資料辯論樣本](docs/taiwan/examples/synthetic-debate/report.md)
+
+新增 `--extended` 完整研究資料入口：估值、現金流／設備支出、資產負債、新聞／社群
+標題樣本、還原股價、除權息／減資／分割／面額變更，以及 TWSE／TPEx 官方歷史交易日。
+同一資料包提供行情、基本面、新聞、社群四組證據，多方／空方／風險 Agent 都能引用。
+另提供不可覆寫的資料版本與原始財報 PDF 封存、歷史重放及決策評估。
+詳見 [擴充功能與操作](docs/taiwan/research-completion.md)。
 
 在 Codex 開啟本機儲存庫及下載的資料包後，可輸入：
 
@@ -63,10 +69,20 @@ python -m tradingagents.research prepare --symbols 2330,3017,3231 --start 2025-0
 基本面仍明確標記缺資料，需使用當時留存的版本，不可為取得非空結果而關閉防護。
 每日資料缺公布時間時保守只納入分析日前一日以前的交易資料；不是盤中分析工具。
 
-本版是資料層 MVP，尚未將台股接入完整 Agent Graph：Yahoo 快照／identity／settlement
-旁路、台股新聞、歷史市場 membership、版本化財報 archive、官方交易曆、成本／漲跌停
-及硬風控仍需後續實作。法人連續天數目前依可用價格列計算，標示 observed-only 與
-窗口截斷，尚未經官方交易曆驗證；未還原價格不適合直接解讀除權息跨期報酬。
+台股使用獨立的 Codex 研究流程；原版美股 LangGraph 與供應商保持可用。
+增補入口不呼叫原版預設付費模型，也不需要 Yahoo 的台股旁路。基本入口仍提供
+原始未還原價格及 observed-only 法人統計；增補入口另提供還原價與官方交易日統計。
+仍須區分研究工具與交易系統：沒有實際成交、配息再投資帳務或投組淨值；歷史上市櫃
+身分及尚未留存的舊財報更正版本不可推測。歷史回測只接受當時實際保存的資料包。
+
+```shell
+python -m tradingagents.research prepare --symbols 2330,3017,3231 --start 2025-01-01 --as-of 2026-10-14 --extended --archive-dir private-vintages --output-dir research-runs
+python -m tradingagents.research audit --snapshot research-runs/2330-2026-10-14/snapshot.json --output audit-2026-10-14.json
+```
+
+工作流程的 extended 預設開啟，並產出版本封存及資料稽核；還原股價需具備相應 FinMind
+權限。缺少關鍵資料會讓稽核失敗並保存缺漏報告，不會產生假數值。artifact 只保留一天，
+下載後請保管自己的版本資料庫，勿將真實 Sponsor 資料、Token 或 Codex 憑證提交到公開 Git。
 
 ## 自動測試（完全離線）
 

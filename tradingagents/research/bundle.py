@@ -121,6 +121,12 @@ def build_bundle(snapshot):
             "value_available_dates": sorted({r["available_at"] for r in subset if r.get("available_at")}),
             "availability": "available" if value is not None else "unavailable",
         }
+        if any(r["values"].get("url") for r in subset):
+            evidence[key]["article_urls"] = sorted({r["values"]["url"] for r in subset if r["values"].get("url")})
+            evidence[key]["attributed_publishers"] = sorted({r["values"]["publisher"] for r in subset if r["values"].get("publisher")})
+        if "extensions" in snapshot and any(r.get("publication_evidence") for r in subset):
+            evidence[key]["publication_document_urls"] = sorted({r["publication_evidence"]["document_url"]
+                                                                 for r in subset if r.get("publication_evidence")})
 
     prices = records[PRICE]
     if prices and (day(as_of) - day(prices[-1]["data_date"])).days > 7:
@@ -152,12 +158,16 @@ def build_bundle(snapshot):
         for key in ("latest_net_shares", "signed_days", "streak_net_shares", "window_net_shares"):
             add(f"institutions.{group}.{key}", metric[key],
                 "observed days" if key == "signed_days" else "shares", INSTITUTIONS, records[INSTITUTIONS])
+    from tradingagents.dataflows.taiwan.extensions import add_extended_evidence
+
+    extended_missing = add_extended_evidence(snapshot, add, coverage)
     missing = [name for name, result in coverage.items() if result["status"] != "ok"]
-    return {
+    bundle = {
         "schema_version": 1, "stock_id": stock_id, "exchange": instrument["exchange"], "as_of": as_of,
         "data_mode": snapshot.get("data_mode", "provider_snapshot"),
         "snapshot_sha256": fingerprint(snapshot), "evidence": evidence, "coverage": coverage,
-        "requires_insufficient_data": not prices or PRICE in missing or FINANCIAL in missing or REVENUE in missing,
+        "requires_insufficient_data": bool(not prices or PRICE in missing or FINANCIAL in missing
+                                            or REVENUE in missing or extended_missing),
         "limitations": [*[item for item in snapshot.get("limitations", []) if not item.startswith("No LLM analysis")],
                         *institutions["warnings"],
                         "No broker orders or portfolio simulation",
@@ -166,3 +176,16 @@ def build_bundle(snapshot):
         "policy": {"llm_auth": "chatgpt_only", "api_fallback": False, "orders": False,
                    "opening_rounds": 1, "reply_rounds": 1},
     }
+    if "extensions" in snapshot:
+        # Four analyst views share validated evidence; they are not extra LLM calls.
+        groups = {"market": ("prices.", "technical.", "adjusted_technical.", "reference_adjusted_technical.",
+                              "institutions.", "calendar_verified_institutions.", "actions."),
+                  "fundamentals": ("financial.", "revenue.", "cashflow.", "balance.", "valuation."),
+                  "news": ("news.",), "social": ("social.",)}
+        bundle["analyst_views"] = {name: [key for key, value in evidence.items()
+                                            if value["path"].startswith(prefixes)]
+                                   for name, prefixes in groups.items()}
+        calendar = snapshot.get("market_calendar", {})
+        bundle["calendar_coverage"] = {key: calendar.get(key) for key in
+                                       ("status", "start", "end", "basis", "warnings")}
+    return bundle
