@@ -1,5 +1,23 @@
 # Taiwan TradingAgents — 第一階段資料擴充
 
+已新增 **Codex 原生多 Agent 研究入口**：FinMind Sponsor 資料由 GitHub Secret
+`FINMIND_TOKEN` 準備；下載資料包後，Codex 用 ChatGPT 登入主持多方／空方／風險辯論。
+不需要 OpenAI API Key，仍會消耗你的 Codex 方案額度，額度不足停止，不切換付費 API。
+詳見 [Codex 操作指南](docs/taiwan/codex-research.md)。
+
+[Codex 驗證紀錄](docs/taiwan/codex-validation.md) ·
+[合成資料辯論樣本](docs/taiwan/examples/synthetic-debate/report.md)
+
+在 Codex 開啟本機儲存庫及下載的資料包後，可輸入：
+
+```text
+使用 $taiwan-stock-research，研究 research-runs/2330-2026-10-14。
+啟動多方、空方、風險三個獨立子 Agent，完成辯論並輸出繁體中文報告。
+```
+
+GitHub Actions 的 **Prepare Taiwan Sponsor research data** 只準備資料，不執行 AI。
+此工作流程須先經審查合併至 main 才能使用；請勿為方便測試將 Secret 提供給任意 feature/PR 程式。
+
 本分支保留 TradingAgents 的美股分析功能，新增獨立台股資料 Provider。
 **台股預設入口不使用 LLM、不呼叫付費 LLM API、不下單。**
 目前以官方 commit `1394a3f72aa4393e1a98f51b382434c4b4c2d972` 開發；
