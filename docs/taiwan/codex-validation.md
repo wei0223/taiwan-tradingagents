@@ -54,4 +54,15 @@ Canonical Agent ID 是本次真實工具的識別，单凭登記字段无法證�
 - MOPS 公布日 archive、官方交易曆、台股原版 LangGraph 接線仍未實作。
 - 沒有 OpenAI API Key 调用、付費服務開通、自動 credits 購買或實際下單。
 
-GitHub 全套 CI 結果另以 PR Checks 顯示；本文件区分本機、原生子 Agent、CLI Mock 与 Sponsor live。
+## 遠端完整 CI
+
+程式提交 `d1dacee21d9480f4a7a38481099c76ecb712e4b2` 的完整 CI 全通過：
+Python 3.11、3.12、3.13、3.14、America/New_York、clean-install smoke 及全庫 Ruff。
+Python 3.11 日誌：1300 passed、1 skipped、1 deselected、124 subtests passed；
+skip 為未安装選用 langchain_aws，integration 預設排除。data-only CI 各版本也全通過。
+
+- [完整 CI](https://github.com/wei0223/taiwan-tradingagents/actions/runs/38544138944)
+- [台股／研究離線 CI](https://github.com/wei0223/taiwan-tradingagents/actions/runs/38544138940)
+
+本文件最後補充上述結果，沒有變更已通過的程式行為。本機、原生子 Agent、CLI Mock
+及 Sponsor live 的範圍保持分開，不以離線 CI 代替 Sponsor 端到端實測。
