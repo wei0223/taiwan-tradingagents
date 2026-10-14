@@ -106,7 +106,7 @@ def build_bundle(snapshot):
         coverage[PRICE]["warnings"].append("Latest price is more than a week old; freshness unverified")
     # Small context: recent rows plus full-window calculated indicators, not the raw archive.
     for record in prices[-10:]:
-        for field, value in record["values"].items():
+        for field, value in sorted(record["values"].items()):
             add(f"prices.{record['data_date']}.{field}", value,
                 "shares" if field == "volume" else "TWD unadjusted", PRICE, [record])
     tech = technical(prices)
