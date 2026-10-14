@@ -1,0 +1,57 @@
+name: Prepare Taiwan Sponsor research data
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: '台股代碼，以逗號分隔'
+        required: true
+        default: '2330,3017,3231'
+        type: string
+      start:
+        description: '資料起日 YYYY-MM-DD（建議至少一年）'
+        required: true
+        type: string
+      as_of:
+        description: '分析日期 YYYY-MM-DD（不得在未來）'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    # Secrets are only used by the trusted default branch; never PR/fork-controlled code.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install data-only dependencies (no secrets in environment)
+        run: python -m pip install python-dotenv requests
+      - name: Prepare evidence bundles with Sponsor Token
+        id: prepare
+        continue-on-error: true
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          RESEARCH_SYMBOLS: ${{ inputs.symbols }}
+          RESEARCH_START: ${{ inputs.start }}
+          RESEARCH_AS_OF: ${{ inputs.as_of }}
+        run: python -m tradingagents.research prepare --require-token --output-dir research-data
+      - name: Upload data packages (no Token, no Codex credentials)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: taiwan-research-data-${{ github.run_id }}
+          path: research-data/
+          retention-days: 1
+          if-no-files-found: error
+      - name: Surface data preparation failures
+        if: steps.prepare.outcome != 'success'
+        run: exit 1

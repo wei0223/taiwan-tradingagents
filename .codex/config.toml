@@ -1,0 +1,6 @@
+# Research uses the signed-in ChatGPT plan, never API-key billing.
+forced_login_method = "chatgpt"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
