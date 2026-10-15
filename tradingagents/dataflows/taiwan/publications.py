@@ -6,12 +6,16 @@ first usable date is at least the Taipei capture date of both sources.
 
 from __future__ import annotations
 
+import base64
 import calendar
 import hashlib
 import json
 import re
+import time
 from datetime import UTC, date, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
+
+from requests.exceptions import ConnectionError, Timeout
 
 from tradingagents.dataflows.errors import VendorUnavailableError
 
@@ -131,15 +135,31 @@ def parse_announcement(dataset, stock_id, raw):
 class MopsAnnouncementClient:
     endpoint = "https://mopsov.twse.com.tw/mops/web/ezsearch_query"
 
-    def __init__(self, transport=None, clock=None):
+    def __init__(self, transport=None, clock=None, sleeper=None):
         if transport is None:
             import requests
 
             transport = requests.Session()
         self.transport = transport
         self.clock = clock or (lambda: datetime.now(UTC))
+        self.sleeper = sleeper or time.sleep
 
     def query(self, dataset, stock_id, start, as_of):
+        failures = []
+        for attempt in range(3):
+            try:
+                archive = self._query_once(dataset, stock_id, start, as_of)
+                archive["failed_attempts"] = failures
+                archive["attempt_count"] = attempt + 1
+                return archive
+            except VendorUnavailableError as exc:
+                failures.append(exc.failure_receipt)
+                if not exc.retryable or attempt == 2:
+                    exc.failure_receipt = {**exc.failure_receipt, "failed_attempts": failures}
+                    raise
+                self.sleeper((2, 5)[attempt])
+
+    def _query_once(self, dataset, stock_id, start, as_of):
         if (
             dataset not in ITEMS
             or not re.fullmatch(r"\d{4,6}", stock_id)
@@ -159,6 +179,7 @@ class MopsAnnouncementClient:
             "lang": "TW",
             "AN": "",
         }
+        response = None
         try:
             # Own transport; never forward FinMind Authorization headers to MOPS.
             response = self.transport.post(
@@ -182,10 +203,22 @@ class MopsAnnouncementClient:
             now = self.clock()
             if now.tzinfo is None:
                 raise ValueError("Clock must be timezone-aware")
-        except Exception:
-            raise VendorUnavailableError(
+        except Exception as exc:
+            error = VendorUnavailableError(
                 "MOPS announcement query unavailable or invalid; no dates inferred"
-            ) from None
+            )
+            status = getattr(response, "status_code", None)
+            content = getattr(response, "content", b"")
+            error.retryable = status in {429, 500, 502, 503, 504} or isinstance(exc, (Timeout, ConnectionError))
+            error.failure_receipt = {
+                "dataset": dataset, "stock_id": stock_id, "query": params,
+                "source_url": self.endpoint, "retrieved_at": self.clock().astimezone(UTC).isoformat(),
+                "raw_rows": [], "http_status": status, "retryable": error.retryable,
+                "response_sha256": hashlib.sha256(content).hexdigest(),
+                "raw_response_base64": base64.b64encode(content).decode("ascii"),
+                "error_kind": type(exc).__name__,
+            }
+            raise error from None
         return {
             "dataset": dataset,
             "stock_id": stock_id,
@@ -231,8 +264,9 @@ class MopsPublicationResolver:
                         min(self.as_of, f"{year}-12-31"),
                     )
                     archive["warnings"] = []
-                except VendorUnavailableError:
+                except VendorUnavailableError as exc:
                     archive = {
+                        **getattr(exc, "failure_receipt", {}),
                         "dataset": dataset,
                         "stock_id": stock_id,
                         "raw_rows": [],
