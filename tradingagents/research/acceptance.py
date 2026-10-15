@@ -1,8 +1,11 @@
 """Credential-free integration acceptance for captured, source-bound research inputs."""
 
+import hashlib
+import json
 from pathlib import Path
 
 from tradingagents.dataflows.taiwan.calendar import verify_calendar
+from tradingagents.dataflows.taiwan.publications import MopsAnnouncementClient
 
 from .bundle import fingerprint
 from .debate import write_json
@@ -21,14 +24,25 @@ def accept(snapshot, output_dir):
     for archive in snapshot.get("publication_audit", []):
         query = archive.get("query", {})
         start, end = query.get("SDATE", ""), query.get("EDATE", "")
+        raw = archive.get("raw_response_utf8", "")
+        verified = bool(raw) and (
+            hashlib.sha256(raw.encode("utf-8")).hexdigest() == archive.get("response_sha256")
+            and json.loads(raw.lstrip("\ufeff"))["data"] == archive["raw_rows"]
+            and archive.get("source_url") == MopsAnnouncementClient.endpoint
+            and query.get("CO_ID") == snapshot["instrument"]["stock_id"]
+            and archive["stock_id"] == snapshot["instrument"]["stock_id"]
+        )
         queries.append({
             "dataset": archive["dataset"], "start": start, "end": end,
             "annual_window": bool(start and end and start[:3] == end[:3]),
+            "raw_response_verified": verified,
             "warnings": archive.get("warnings", []),
             "raw_rows": len(archive.get("raw_rows", [])),
             "archive_sha256": fingerprint(archive),
         })
-    annual = bool(queries) and all(q["annual_window"] and not q["warnings"] for q in queries)
+    annual = bool(queries) and all(
+        q["annual_window"] and q["raw_response_verified"] and not q["warnings"] for q in queries
+    )
     ready = (health["incomplete"] == 0 and calendar.get("status") == "ok"
              and bool(sessions) and annual and report["html_audit"]["status"] == "passed")
     result = {
