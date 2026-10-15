@@ -73,8 +73,51 @@ def main(argv=None, provider=None):
     evaluation.add_argument("--horizon", type=int, default=20)
     evaluation.add_argument("--benchmark", default="0050")
     evaluation.add_argument("--output", type=Path, required=True)
+    upgrade = commands.add_parser("upgrade", help="Offline quality, scenarios, rolling metrics and portable three-analyst report")
+    upgrade.add_argument("--snapshot", type=Path, required=True)
+    upgrade.add_argument("--output-dir", type=Path, required=True)
+    upgrade.add_argument("--model", type=Path)
+    upgrade.add_argument("--industry", type=Path)
+    upgrade.add_argument("--analysts", type=Path)
+    validation = commands.add_parser("validate-forecasts", help="Score sealed forecasts only after actual publication")
+    validation.add_argument("--input", type=Path, required=True)
+    validation.add_argument("--output", type=Path, required=True)
+    signals = commands.add_parser("validate-signals", help="Next-session, cost-aware adjusted outcome evaluation")
+    signals.add_argument("--input", type=Path, required=True)
+    signals.add_argument("--output", type=Path, required=True)
+    signals.add_argument("--horizon", type=int, default=20)
+    acceptance = commands.add_parser("acceptance", help="Offline integration audit and three-analyst report; no credentials")
+    acceptance.add_argument("--snapshot", type=Path, required=True)
+    acceptance.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "acceptance":
+            from .acceptance import accept
+
+            result = accept(load_json(args.snapshot), args.output_dir)
+            print(json.dumps({k: result[k] for k in ("stock_id", "status", "calendar_sessions", "annual_mops_verified")}))
+            return 0 if result["status"] == "passed" else 1
+        if args.command in {"validate-forecasts", "validate-signals"}:
+            from .validation import forecast_errors, signal_performance
+
+            data = load_json(args.input)
+            result = (forecast_errors(data['predictions'], data['actuals']) if args.command == 'validate-forecasts'
+                      else signal_performance(data['signals'], data['prices'], data['sessions'], args.horizon,
+                                              **data.get('cost_assumptions', {})))
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, result)
+            print(json.dumps({'status': result['status']}))
+            return 0
+        if args.command == "upgrade":
+            from .reporting import package
+
+            result = package(load_json(args.snapshot), args.output_dir,
+                             load_json(args.model) if args.model else None,
+                             load_json(args.industry) if args.industry else None,
+                             load_json(args.analysts) if args.analysts else None)
+            print(json.dumps({"stock_id": result["stock_id"], "decision": result["decision"]["state"],
+                              "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"]}))
+            return 0
         if args.command == "prepare":
             token = os.getenv("FINMIND_TOKEN", "")
             if args.require_token and not token:
