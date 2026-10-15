@@ -230,6 +230,28 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MopsAnnouncementClient(transport).query(REVENUE, code, start, end)
 
+    def test_transient_retry_is_bounded_and_retains_failed_source_bytes(self):
+        transport = Transport()
+        transient = Response({"message": "temporary source failure"})
+        transient.status_code = 503
+        pauses = []
+        client = MopsAnnouncementClient(transport, lambda: NOW, pauses.append)
+        with patch.object(transport, "post", side_effect=[transient, Response({"status": "success", "data": []})]):
+            result = client.query(REVENUE, "3231", "2024-01-01", "2024-05-20")
+        self.assertEqual(result["attempt_count"], 2)
+        self.assertEqual(result["failed_attempts"][0]["http_status"], 503)
+        self.assertEqual(pauses, [2])
+        with patch.object(transport, "post", return_value=transient) as request:
+            with self.assertRaises(VendorUnavailableError) as raised:
+                client.query(REVENUE, "3231", "2024-01-01", "2024-05-20")
+            self.assertEqual(request.call_count, 3)
+            self.assertEqual(len(raised.exception.failure_receipt["failed_attempts"]), 3)
+        transient.status_code = 403
+        with patch.object(transport, "post", return_value=transient) as request:
+            with self.assertRaises(VendorUnavailableError):
+                client.query(REVENUE, "3231", "2024-01-01", "2024-05-20")
+            self.assertEqual(request.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

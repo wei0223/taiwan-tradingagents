@@ -65,11 +65,13 @@ jobs:
           for file in research-data/*/snapshot.json; do options+=(--snapshot "$file"); done
           python -m tradingagents.research audit "${options[@]}"
       - name: Accept integrated research reports without credentials
-        if: steps.prepare.outcome == 'success' && inputs.extended
+        if: always() && steps.prepare.outcome == 'success' && inputs.extended
         run: |
+          status=0
           for file in research-data/*/snapshot.json; do
-            python -m tradingagents.research acceptance --snapshot "$file" --output-dir "$(dirname "$file")/integrated"
+            python -m tradingagents.research acceptance --snapshot "$file" --output-dir "$(dirname "$file")/integrated" || status=1
           done
+          exit "$status"
       - name: Upload data packages (no Token, no Codex credentials)
         if: always()
         uses: actions/upload-artifact@v7
