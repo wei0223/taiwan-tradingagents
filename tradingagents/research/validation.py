@@ -41,16 +41,56 @@ def forecast_errors(predictions, actuals, today=None):
                 "model_version": predicted["model_version"],
                 "error": error,
                 "absolute_error": abs(error),
+                "actual_value": finite(actual["value"]),
             }
         )
     groups = {}
     for row in errors:
         key = f"{row['model_version']}:{row['metric']}:{row['basis']}"
-        groups.setdefault(key, []).append(row["absolute_error"])
+        groups.setdefault(key, []).append(row)
+    paired = {}
+    for metric, basis in {(p["metric"], p["basis"]) for p in predictions}:
+        models = {
+            p["model_version"] for p in predictions if (p["metric"], p["basis"]) == (metric, basis)
+        }
+        by_model = {
+            m: {
+                (r["stock_id"], r["period"]): r
+                for r in errors
+                if r["model_version"] == m and (r["metric"], r["basis"]) == (metric, basis)
+            }
+            for m in sorted(models)
+        }
+        common = sorted(set.intersection(*(set(v) for v in by_model.values())))
+        paired[f"{metric}:{basis}"] = {
+            "common_company_periods": [list(key) for key in common],
+            "models": {
+                m: {
+                    "observations": len(common),
+                    "mae": mean(v[k]["absolute_error"] for k in common) if common else None,
+                    "wape": sum(v[k]["absolute_error"] for k in common)
+                    / sum(abs(v[k]["actual_value"]) for k in common)
+                    if sum(abs(v[k]["actual_value"]) for k in common)
+                    else None,
+                }
+                for m, v in by_model.items()
+            },
+        }
     return {
         "resolved": errors,
         "pending": pending,
-        "mae_by_model_metric_basis": {k: mean(v) for k, v in groups.items()},
+        "mae_by_model_metric_basis": {
+            k: mean(r["absolute_error"] for r in v) for k, v in groups.items()
+        },
+        "wape_by_model_metric_basis": {
+            k: sum(r["absolute_error"] for r in v) / sum(abs(r["actual_value"]) for r in v)
+            if sum(abs(r["actual_value"]) for r in v)
+            else None
+            for k, v in groups.items()
+        },
+        "observations_by_model_metric_basis": {k: len(v) for k, v in groups.items()},
+        "sample_warning": "Monthly observations and their quarter sum overlap; never count them as independent samples",
+        "paired_by_metric_basis": paired,
         "status": "available" if errors else "pending_future_actuals",
     }
 
