@@ -14,6 +14,12 @@
 另提供不可覆寫的資料版本與原始財報 PDF 封存、歷史重放及決策評估。
 詳見 [擴充功能與操作](docs/taiwan/research-completion.md)。
 
+日常 `upgrade`／Sponsor `acceptance` 已串接「會計獲利、現金持續性、估值、短期交易」
+四項獨立裁決。審查原件可選用 `--review-input`；未知期間／版本／稀釋附註保留不可用。
+累計現金流僅在同口徑版本銜接核對後轉單季，募資授權不當成實發。
+原預測用 `track-release` 追加初次公告評分與更正版診斷；不改原值、發布時間或已交付報告。
+詳見 [審查規則、輸入契約與追蹤](docs/taiwan/review-rules.md)。
+
 在 Codex 開啟本機儲存庫及下載的資料包後，可輸入：
 
 ```text

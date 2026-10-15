@@ -13,11 +13,11 @@ from .health import audit_snapshots
 from .reporting import package
 
 
-def accept(snapshot, output_dir):
+def accept(snapshot, output_dir, review_input=None):
     """Exercise the daily report path without manufacturing EPS assumptions or PIT history."""
     output = Path(output_dir)
     health = audit_snapshots([snapshot])
-    report = package(snapshot, output)
+    report = package(snapshot, output, review_input=review_input)
     calendar = snapshot.get("market_calendar", {})
     sessions = verify_calendar(calendar, snapshot["instrument"]["exchange"])
     queries = []
@@ -53,6 +53,9 @@ def accept(snapshot, output_dir):
         "calendar_sessions": len(sessions), "calendar_archives": len(calendar.get("archives", [])),
         "dataset_counts": {k: len(v["records"]) for k, v in snapshot["datasets"].items()},
         "forecast_status": report["forecast"]["status"],
+        "review_axes": {k: v["status"] for k, v in report["review"]["axes"].items()},
+        "review_sha256": report["review"]["review_sha256"],
+        "review_gate": "passed; unavailable axes explicitly retained, not investment accuracy",
         "limitations": [
             "Operational acceptance is not forecast accuracy or profitable strategy validation",
             "Current captures cannot stand in for original historical numeric versions",

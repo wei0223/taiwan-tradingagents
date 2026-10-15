@@ -25,7 +25,9 @@ class AcceptanceTests(unittest.TestCase):
                 self.assertTrue((output / "report.html").is_file())
                 snapshot["publication_audit"][0]["response_sha256"] = "0" * 64
                 path.write_text(json.dumps(snapshot), encoding="utf-8")
+                output = Path(folder) / "integrated-corrupt"
                 self.assertEqual(main(["acceptance", "--snapshot", str(path), "--output-dir", str(output)]), 1)
                 snapshot["publication_audit"] = []
                 path.write_text(json.dumps(snapshot), encoding="utf-8")
+                output = Path(folder) / "integrated-missing"
                 self.assertEqual(main(["acceptance", "--snapshot", str(path), "--output-dir", str(output)]), 1)

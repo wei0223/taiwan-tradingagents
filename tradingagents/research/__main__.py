@@ -79,6 +79,9 @@ def main(argv=None, provider=None):
     upgrade.add_argument("--model", type=Path)
     upgrade.add_argument("--industry", type=Path)
     upgrade.add_argument("--analysts", type=Path)
+    upgrade.add_argument("--review-input", type=Path, help="Named-reviewer source packets; never infer missing statement semantics")
+    upgrade.add_argument("--release", type=Path, help="Original sealed release; preserve issue time and predictions")
+    upgrade.add_argument("--actuals", type=Path, help="Explicit selected actual revision list; requires --release")
     validation = commands.add_parser("validate-forecasts", help="Score sealed forecasts only after actual publication")
     validation.add_argument("--input", type=Path, required=True)
     validation.add_argument("--output", type=Path, required=True)
@@ -89,12 +92,26 @@ def main(argv=None, provider=None):
     acceptance = commands.add_parser("acceptance", help="Offline integration audit and three-analyst report; no credentials")
     acceptance.add_argument("--snapshot", type=Path, required=True)
     acceptance.add_argument("--output-dir", type=Path, required=True)
+    acceptance.add_argument("--review-input", type=Path)
+    tracking = commands.add_parser("track-release", help="Append outcomes to an original release, without reissuing forecasts")
+    tracking.add_argument("--release", type=Path, required=True)
+    tracking.add_argument("--actuals", type=Path)
+    tracking.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "track-release":
+            from .tracking import read_tracking, track
+
+            path = track(args.release, load_json(args.actuals) if args.actuals else [], args.output_dir)
+            result = read_tracking(path)
+            print(json.dumps({"release_sha256": result["release_sha256"],
+                              "status": result["primary_initial_vintage_results"]["status"]}))
+            return 0
         if args.command == "acceptance":
             from .acceptance import accept
 
-            result = accept(load_json(args.snapshot), args.output_dir)
+            result = accept(load_json(args.snapshot), args.output_dir,
+                            load_json(args.review_input) if args.review_input else None)
             print(json.dumps({k: result[k] for k in ("stock_id", "status", "calendar_sessions", "annual_mops_verified")}))
             return 0 if result["status"] == "passed" else 1
         if args.command in {"validate-forecasts", "validate-signals"}:
@@ -114,9 +131,12 @@ def main(argv=None, provider=None):
             result = package(load_json(args.snapshot), args.output_dir,
                              load_json(args.model) if args.model else None,
                              load_json(args.industry) if args.industry else None,
-                             load_json(args.analysts) if args.analysts else None)
+                             load_json(args.analysts) if args.analysts else None,
+                             load_json(args.review_input) if args.review_input else None,
+                             args.release, load_json(args.actuals) if args.actuals else None)
             print(json.dumps({"stock_id": result["stock_id"], "decision": result["decision"]["state"],
-                              "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"]}))
+                              "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"],
+                              "review_axes": {k: v["status"] for k, v in result["review"]["axes"].items()}}))
             return 0
         if args.command == "prepare":
             token = os.getenv("FINMIND_TOKEN", "")

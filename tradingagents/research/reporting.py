@@ -12,6 +12,7 @@ from .bundle import build_bundle, fingerprint
 from .debate import write_json
 from .dynamics import conditional_decision, reward_risk, rolling
 from .quality import audit_html, industry_review, source_audit
+from .review import review
 from .scenarios import check_assumption, forecast
 
 
@@ -28,7 +29,23 @@ def table(headers, rows):
     )
 
 
-def package(snapshot, output_dir, specification=None, sources=None, analyst_prose=None):
+def package(
+    snapshot,
+    output_dir,
+    specification=None,
+    sources=None,
+    analyst_prose=None,
+    review_input=None,
+    release_path=None,
+    actuals=None,
+):
+    output = Path(output_dir)
+    # Review editions must never overwrite a delivered report or a sealed source run.
+    protected = ("report.html", "research.json", "release-pointer.json", "snapshot.json")
+    if any((output / name).exists() for name in protected):
+        raise ValueError("Use a new output directory for every report/review edition")
+    if actuals is not None and release_path is None:
+        raise ValueError("Actuals require an original sealed release")
     bundle = build_bundle(snapshot)
     audit = source_audit(snapshot)
     if audit["status"] != "passed":
@@ -68,6 +85,16 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
             "Explicit illustrative entry/loss assumptions; not fills or guaranteed exits"
         )
     stock, as_of = bundle["stock_id"], bundle["as_of"]
+    reviewed = review(stock, as_of, review_input, model, snapshot=snapshot)
+    sealed = None
+    if release_path is not None:
+        from .publication import read_release
+
+        sealed = read_release(release_path)
+        if sealed["stock_id"] != stock:
+            raise ValueError("Sealed forecast and daily report company mismatch")
+        if specification and fingerprint(specification) != sealed["specification_sha256"]:
+            raise ValueError("Changed model requires a separate versioned forecast release")
     numbers = {e["path"]: e["value"] for e in bundle["evidence"].values()}
     price_paths = sorted(p for p in numbers if p.startswith("prices.") and p.endswith(".close"))
     last_price = numbers[price_paths[-1]] if price_paths else None
@@ -81,6 +108,14 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
         "dynamics": dynamics,
         "industry": industry,
         "decision": decision,
+        "review": reviewed,
+        "forecast_preservation": {
+            "status": "original_release_verified" if sealed else "no_release_supplied",
+            "release_sha256": sealed["release_sha256"] if sealed else None,
+            "original_issued_at": sealed["issued_at"] if sealed else None,
+            "predictions_sha256": fingerprint(sealed["predictions"]) if sealed else None,
+            "model_changed": False,
+        },
         "independent_agents_executed": False,
         "prediction_accuracy": {"status": "pending_future_actuals", "mae": None},
         "strategy_performance": {
@@ -95,14 +130,41 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
         specification and specification.get("created_at", "")[:10] > as_of
     )
     summary = (
-        "<h2>決策摘要</h2><p><strong>目前："
-        + (
-            "條件式研究候選"
-            if decision["state"] == "research_candidate"
-            else "觀察，不形成交易訊號"
-        )
-        + "</strong>。基本面估算、價格確認與法人視窗分開檢核，不因報告完成而產生買賣指令。</p>"
+        "<h2>分項裁決</h2><p>已實現每股獲利、現金持續性、估值與短期交易分開判斷。"
+        "沒有證明低估不等於證明高估；會計獲利不等於現金回收或股票總報酬。</p>"
     )
+    labels = {
+        "accounting_earnings": "已實現會計獲利",
+        "cash_sustainability": "現金持續性",
+        "valuation": "估值",
+        "short_term": "短期交易（五至二十交易日）",
+    }
+    status_labels = {
+        "unavailable": "不可用／待原件",
+        "both_increased": "歸母與稀釋 EPS 同比皆增加，支持已實現成長",
+        "both_not_increased": "歸母與稀釋 EPS 同比皆未增加",
+        "mixed": "歸母與每股傳導分歧",
+        "nonnegative_cfo": "單季 CFO 非負；持續性與回款另查",
+        "negative_cfo": "單季 CFO 仍負",
+        "conditional_prices_only": "僅條件價格，不成立合理價或低估結論",
+        "observe": "觀察",
+        "candidate_pending_next_open": "條件候選，待下一實際開盤重算；尚非交易訊號",
+    }
+    summary += table(
+        ["獨立問題", "程式裁決", "依據／限制"],
+        [
+            [
+                labels[k],
+                status_labels[v["status"]],
+                v.get("reason", v.get("interpretation", "固定規則，未證明統計優勢")),
+            ]
+            for k, v in reviewed["axes"].items()
+        ],
+    )
+    summary += (
+        "<p>不可用代表無法裁決，不是看空、零值或中性。完整數值與來源見審查附錄；本流程不下單。</p>"
+    )
+    summary += '<p><a href="review.json">分項計算與條件</a> · <a href="review-input.json">原件、公布／取得時間與版本</a></p>'
     summary += table(
         ["檢核面向", "結果"],
         [
@@ -153,14 +215,10 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
         summary += "<p>年度欄為季度稀釋 EPS 加總近似，非經查核年度加權稀釋 EPS。來源報列本益比未核實分母口徑，因此不標為 TTM PE。情境價格不是目標價；報酬風險比若有列示，也僅依明示進場與失效假設計算，並非可執行報價或保證停損。</p>"
     else:
         summary += "<h2>前瞻 EPS 與估值：暫停估算</h2><p>缺少經正式原件核對的季度口徑、母公司歸屬、加權股數或明示情境。缺口未補齊前，不由歷史 EPS 或新聞目標價反推。</p>"
-    summary += "<h2>什麼會改變判斷？</h2>" + table(
-        ["方向", "可檢核條件"],
-        [
-            ["提高支持", "正式資料支持模型的營收與利潤率、完整法人視窗改善，並出現價格確認。"],
-            ["降低支持", "新公告推翻盈利假設、突破失敗或資料完整性降低；重新計算，不沿用舊訊號。"],
-            ["維持觀察", "條件尚未滿足或互相衝突；不因低歷史倍數或單日買超強行轉多。"],
-        ],
+    summary += "<h2>什麼會改變各項判斷？</h2>" + table(
+        ["面向", "可重算條件"], [[labels[r["axis"]], r["rule"]] for r in reviewed["conditions"]]
     )
+    summary += "<p>比較基準取各公司同季原件；不使用緯創或其他公司的固定利潤率、股數或估值倍數。回款證據不足持續不可用。</p>"
     details = ""
     if risk_scenarios:
         summary += "<h2>條件式報酬與風險</h2><p>以下使用明示的示意進場與失效價格，並非實際委託或保證停損；跳空、成本與滑價仍可能改變結果。條件未滿足時維持觀察。</p>"
@@ -197,6 +255,69 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
         body = "".join("<p>" + html.escape(p) + "</p>" for p in prose.get(role, []))
         if role == "fundamental":
             body += "<p>營收規模、利潤率與現金轉換分開判斷；未取得的產品組合與同業資料明列缺口。歷史成長不直接保證估值吸引力。</p>"
+            earnings = reviewed["axes"]["accounting_earnings"]
+            if earnings["status"] != "unavailable":
+                current, prior = earnings["current"], earnings["prior"]
+                body += "<h3>已核對單季會計獲利</h3>" + table(
+                    [
+                        "項目",
+                        current["period_start"] + " 至 " + current["period_end"],
+                        prior["period_start"] + " 至 " + prior["period_end"],
+                    ],
+                    [
+                        [label, current[key], prior[key]]
+                        for key, label in [
+                            ("parent_profit_twd", "歸母淨利（TWD）"),
+                            ("eps_twd", "精算稀釋 EPS（元）"),
+                            ("diluted_numerator_twd", "稀釋分子（TWD）"),
+                            ("diluted_weighted_shares", "稀釋加權股數（股）"),
+                            ("operating_margin", "營益率（比率）"),
+                            ("parent_margin", "歸母率（比率）"),
+                        ]
+                    ],
+                )
+                body += (
+                    "<p>來源定位："
+                    + html.escape(current["locator"] + "；" + prior["locator"])
+                    + "。這是列示期間的已實現獲利，不是未來 EPS 預測。</p>"
+                )
+            cash = reviewed["axes"]["cash_sustainability"]
+            observed = cash.get("ytd_observation", {})
+            if observed.get("status") == "available":
+                body += "<h3>現金流口徑</h3>" + table(
+                    ["項目", "金額／期間"],
+                    [
+                        [
+                            "累計期間（不可稱單季）",
+                            observed["period_start"] + " 至 " + observed["period_end"],
+                        ],
+                        ["累計 CFO（TWD）", observed["values"]["cfo_twd"]],
+                        ["累計營收（TWD）", observed["values"]["revenue_twd"]],
+                        [
+                            "單季 CFO（TWD）",
+                            cash.get("single_quarter", {}).get("cfo_twd", "不可用：待版本銜接"),
+                        ],
+                        ["回款確認", "不可用：不能從餘額或 CFO 推定"],
+                    ],
+                )
+            compared = cash.get("same_YTD_comparison", {})
+            if compared.get("status") == "available":
+                body += table(
+                    ["同期間同比檢查", "程式計算"],
+                    [
+                        ["CFO 絕對變化（TWD）", compared["cfo_change_twd"]],
+                        ["CFO／營收比變化（百分點）", compared["ratio_change_pp"]],
+                    ],
+                )
+                body += "<p>絕對資金需求與每元營收的現金流出可能朝不同方向變化；兩者都要看，不自行加回正常化 CFO。</p>"
+            if reviewed["capital_events"]:
+                body += "<h3>募資與股數核對</h3>" + table(
+                    ["狀態", "核對／待補事項"],
+                    [
+                        [r["status"], r.get("reason", "已核對發行與附註；不重複加計股數")]
+                        for r in reviewed["capital_events"]
+                    ],
+                )
             if model["status"] == "ready":
                 body += "<h3>可追溯假設表</h3>" + table(
                     [
@@ -287,6 +408,22 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
             body += table(["視窗（交易日）", "程式計算", "觀測範圍／判定"], rows)
             body += "<p>技術型態為明示機械規則，並非已驗證勝率；ATR 使用真實波幅簡單平均。缺日不補零，法人淨額不代表全部籌碼或因果證明。</p>"
         details += "<details><summary>" + label + "完整分析</summary>" + body + "</details>"
+    if sealed is not None:
+        from .tracking import read_tracking, track
+
+        tracking = read_tracking(track(release_path, actuals or [], output / "tracking"))
+        result["forecast_tracking"] = tracking
+        summary += "<h2>原預測封存與追蹤</h2>" + table(
+            ["項目", "核對結果"],
+            [
+                ["原發布時間（不改寫）", sealed["issued_at"]],
+                ["原發布雜湊", sealed["release_sha256"]],
+                ["原預測紀錄數", len(sealed["predictions"])],
+                ["初次公告主評分", tracking["primary_initial_vintage_results"]["status"]],
+                ["另選版本診斷", tracking["results"]["status"]],
+                ["模型修改", "無；若改模型另建新版本"],
+            ],
+        )
     # Keep raw PDF bytes in JSON/archive, never render megabytes of base64 as prose.
     display = copy.deepcopy(result)
     for doc in (
@@ -326,8 +463,11 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
     result["html_audit"] = links
-    output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
+    write_json(output / "review.json", reviewed)
+    write_json(output / "review-input.json", review_input or {})
+    if sealed is not None:
+        write_json(output / "forecast-preservation.json", result["forecast_preservation"])
     if model["status"] == "ready":
         documents = output / "documents"
         documents.mkdir(exist_ok=True)
@@ -345,6 +485,8 @@ def package(snapshot, output_dir, specification=None, sources=None, analyst_pros
             "bundle_sha256": fingerprint(bundle),
             "research_sha256": fingerprint(result),
             "html_sha256": hashlib.sha256(page.encode()).hexdigest(),
+            "review_sha256": reviewed["review_sha256"],
+            "review_input_sha256": fingerprint(review_input or {}),
         },
     )
     return result
