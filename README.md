@@ -500,6 +500,36 @@ What does not vary anymore: the analyzed company identity is resolved determinis
 
 Backtest results are not guaranteed to match any published figure. Returns depend on the model, the temperature, the date range, data quality, and the sampling above. Treat the framework as a research scaffold for studying multi-agent analysis, not as a strategy with a fixed, replicable return.
 
+## Taiwan research quality and three-analyst reports
+
+The offline `python -m tradingagents.research upgrade` command adds source-period auditing,
+explicit EPS/valuation scenarios, rolling technical/institutional windows, and a portable
+report with expandable fundamental, technical, and institutional analyst sections.
+Forecasts require reviewed original documents and source-linked assumptions; missing inputs
+remain unavailable. It makes no LLM API calls and places no orders.
+
+See [the quality workflow and limitations](docs/taiwan/research-quality.md) for schemas,
+numeric counterfactual review, prediction errors, next-session cost-aware evaluation,
+and the distinction between available capabilities and actually validated performance.
+
+Offline revenue experiments now support log-trend, monthly momentum and source-linked
+industry growth models, with capture-aware walk-forward folds. Run
+`python -m tradingagents.research.predictive_cli --help` for the JSON input interface.
+Missing independent industry inputs or historical numeric vintages remain unavailable;
+no default 20% growth or statistically unverified ensemble weights are substituted.
+See [predictive validation](docs/taiwan/predictive-validation.md) for conditional valuation,
+industry event transmission and separate 5/20-session setup rules.
+
+See [historical source capture and dual-track validation](docs/taiwan/history-validation.md)
+for annual MOPS publication windows, multi-year official calendars, original statement
+parsing, pending Q3 nowcasts and explicitly labeled revised-data diagnostics.
+
+The extended Sponsor workflow also runs credential-free `research acceptance` after its
+source audit, producing a portable three-analyst report and machine-readable acceptance
+receipt for each symbol. Missing reviewed EPS assumptions stay unavailable; operational
+success does not establish forecast accuracy. Reports and raw Sponsor data remain workflow
+artifacts, never committed datasets.
+
 ## Contributing
 
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).

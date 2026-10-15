@@ -37,21 +37,59 @@ class OfficialCalendarProvider:
                 now = self.clock()
                 if now.tzinfo is None:
                     raise ValueError("Clock requires timezone")
-                self.cache[key] = (payload, {"source_url": url, "query": params,
-                    "retrieved_at": now.astimezone(UTC).isoformat(),
-                    "raw_response_utf8": response.content.decode("utf-8"),
-                    "response_sha256": hashlib.sha256(response.content).hexdigest()})
+                self.cache[key] = (
+                    payload,
+                    {
+                        "source_url": url,
+                        "query": params,
+                        "retrieved_at": now.astimezone(UTC).isoformat(),
+                        "raw_response_utf8": response.content.decode("utf-8"),
+                        "response_sha256": hashlib.sha256(response.content).hexdigest(),
+                    },
+                )
             except Exception:
-                raise VendorUnavailableError("Official session source unavailable or invalid") from None
+                raise VendorUnavailableError(
+                    "Official session source unavailable or invalid"
+                ) from None
         return self.cache[key]
 
     def fetch(self, exchange, start, as_of):
         if exchange not in {"twse", "tpex"} or day(start) > day(as_of):
             raise ValueError("Invalid calendar request")
         end = day(as_of) - timedelta(days=1)
-        result = {"exchange": exchange, "start": start, "end": end.isoformat(),
-                  "sessions": [], "archives": [], "status": "unavailable", "warnings": [],
-                  "basis": "official market index sessions; individual suspensions not inferred"}
+        if (end.year - day(start).year) * 12 + end.month - day(start).month > 59:
+            parts = []
+            cursor = day(start)
+            while cursor <= end:
+                boundary = min(date(cursor.year + 3, cursor.month, 1), day(as_of))
+                parts.append(self.fetch(exchange, cursor.isoformat(), boundary.isoformat()))
+                cursor = boundary
+            good = [p for p in parts if p["status"] == "ok"]
+            result = {
+                "exchange": exchange,
+                "start": start,
+                "end": end.isoformat(),
+                "sessions": sorted({d for p in good for d in p["sessions"]}),
+                "archives": [a for p in good for a in p["archives"]],
+                "status": "ok" if len(good) == len(parts) else "partial",
+                "warnings": []
+                if len(good) == len(parts)
+                else ["Missing bounded calendar captures"],
+                "failed_parts": [p for p in parts if p["status"] != "ok"],
+                "basis": "official bounded captures; no weekday inference",
+            }
+            verify_calendar(result, exchange)
+            return result
+        result = {
+            "exchange": exchange,
+            "start": start,
+            "end": end.isoformat(),
+            "sessions": [],
+            "archives": [],
+            "status": "unavailable",
+            "warnings": [],
+            "basis": "official market index sessions; individual suspensions not inferred",
+        }
         dates = []
         try:
             cursor = day(start).replace(day=1)
@@ -73,7 +111,9 @@ class OfficialCalendarProvider:
                 result["warnings"].append("No verified sessions in requested window")
         except (VendorUnavailableError, KeyError, TypeError, ValueError, IndexError):
             result["sessions"] = []
-            result["warnings"].append("Official calendar coverage unavailable; do not infer weekdays")
+            result["warnings"].append(
+                "Official calendar coverage unavailable; do not infer weekdays"
+            )
         return result
 
 
@@ -87,13 +127,21 @@ def month_sessions(payload, exchange, month):
         parse = roc_date
     else:
         tables = payload.get("tables", [])
-        if payload.get("stat") != "ok" or len(tables) != 1 or tables[0].get("fields", [])[:1] != ["Date"]:
+        if (
+            payload.get("stat") != "ok"
+            or len(tables) != 1
+            or tables[0].get("fields", [])[:1] != ["Date"]
+        ):
             raise ValueError("Invalid TPEx response")
         table = tables[0]
-        if table.get("date") != month.strftime("%Y/%m") or table.get("totalCount") != len(table.get("data", [])):
+        if table.get("date") != month.strftime("%Y/%m") or table.get("totalCount") != len(
+            table.get("data", [])
+        ):
             raise ValueError("Incomplete TPEx month")
+
         def parse(value):
             return datetime.strptime(value, "%Y/%m/%d").date()
+
     if not table.get("data"):
         raise ValueError("No observed market sessions")
     observed = [parse(row[0]) for row in table["data"]]
@@ -103,10 +151,16 @@ def month_sessions(payload, exchange, month):
 
 
 def verify_calendar(calendar, exchange):
-    if calendar["exchange"] != exchange or calendar["status"] not in {"ok", "partial", "unavailable"}:
+    if calendar["exchange"] != exchange or calendar["status"] not in {
+        "ok",
+        "partial",
+        "unavailable",
+    }:
         raise ValueError("Invalid official calendar")
     sessions = calendar["sessions"]
-    if sessions != sorted(set(sessions)) or any(not day(calendar["start"]) <= day(d) <= day(calendar["end"]) for d in sessions):
+    if sessions != sorted(set(sessions)) or any(
+        not day(calendar["start"]) <= day(d) <= day(calendar["end"]) for d in sessions
+    ):
         raise ValueError("Invalid market sessions")
     recovered = set()
     months = set()
@@ -118,7 +172,11 @@ def verify_calendar(calendar, exchange):
         captured = instant(archive["retrieved_at"]).astimezone(TAIPEI).date()
         if calendar["status"] == "unavailable":
             continue  # Keep malformed response archives for audit; never interpret them as sessions.
-        url = OfficialCalendarProvider.twse_url if exchange == "twse" else OfficialCalendarProvider.tpex_url
+        url = (
+            OfficialCalendarProvider.twse_url
+            if exchange == "twse"
+            else OfficialCalendarProvider.tpex_url
+        )
         if archive["source_url"] != url or archive["query"].get("response") != "json":
             raise ValueError("Unexpected calendar source")
         requested = archive["query"]["date"]

@@ -21,14 +21,19 @@ TAIPEI = timezone(timedelta(hours=8))
 CASHFLOW = "TaiwanStockCashFlowsStatement"
 BALANCE = "TaiwanStockBalanceSheet"
 ITEMS = {REVENUE: "F22", FINANCIAL: "F27", CASHFLOW: "F28", BALANCE: "F26"}
-PATHS = {REVENUE: "/mops/web/ajax_t05st10_ifrs", FINANCIAL: "/mops/web/ajax_t164sb04",
-         CASHFLOW: "/mops/web/ajax_t164sb05", BALANCE: "/mops/web/ajax_t164sb03"}
+PATHS = {
+    REVENUE: "/mops/web/ajax_t05st10_ifrs",
+    FINANCIAL: "/mops/web/ajax_t164sb04",
+    CASHFLOW: "/mops/web/ajax_t164sb05",
+    BALANCE: "/mops/web/ajax_t164sb03",
+}
 STATEMENT_NAMES = {FINANCIAL: "綜合損益表", CASHFLOW: "現金流量表", BALANCE: "資產負債表"}
 
 
 def digest(value):
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-                         allow_nan=False).encode("utf-8")
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -59,7 +64,10 @@ def row_period(dataset, row):
         return date(int(row["revenue_year"]), int(row["revenue_month"]), 1).strftime("%Y-%m")
     if dataset in STATEMENT_NAMES:
         parsed = day(row["date"])
-        if parsed.month not in (3, 6, 9, 12) or parsed.day != calendar.monthrange(parsed.year, parsed.month)[1]:
+        if (
+            parsed.month not in (3, 6, 9, 12)
+            or parsed.day != calendar.monthrange(parsed.year, parsed.month)[1]
+        ):
             raise ValueError("Financial period must end on quarter end")
         return parsed.isoformat()
     raise ValueError("Unsupported publication dataset")
@@ -73,15 +81,19 @@ def parse_announcement(dataset, stock_id, raw):
         raise ValueError("Invalid announcement time")
     published = roc_date(raw["CDATE"])
     stamp = datetime.fromisoformat(f"{published}T{raw['CTIME']}+08:00")
-    pattern = (r"(\d{3})年(\d{1,2})月營業收入" if dataset == REVENUE
-               else r"(\d{3})年第([1-4])季" + STATEMENT_NAMES[dataset])
+    pattern = (
+        r"(\d{3})年(\d{1,2})月營業收入"
+        if dataset == REVENUE
+        else r"(\d{3})年第([1-4])季" + STATEMENT_NAMES[dataset]
+    )
     match = re.fullmatch(pattern, raw["SUBJECT"].strip())
     if not match:
         raise ValueError("Unsupported announcement subject")
     year, part = map(int, match.groups())
     month = part if dataset == REVENUE else part * 3
-    period_date = date(year + 1911, month,
-                       1 if dataset == REVENUE else calendar.monthrange(year + 1911, month)[1])
+    period_date = date(
+        year + 1911, month, 1 if dataset == REVENUE else calendar.monthrange(year + 1911, month)[1]
+    )
     if dataset == REVENUE:
         # A report cannot be released before its entire revenue month has ended.
         if published <= period_date.replace(day=calendar.monthrange(period_date.year, month)[1]):
@@ -89,18 +101,31 @@ def parse_announcement(dataset, stock_id, raw):
     elif published < period_date:
         raise ValueError("Publication precedes quarter end")
     link = urlsplit(raw["HYPERLINK"])
-    if (link.scheme != "https" or link.netloc != "mopsov.twse.com.tw"
-            or link.path != PATHS[dataset] or link.fragment):
+    if (
+        link.scheme != "https"
+        or link.netloc != "mopsov.twse.com.tw"
+        or link.path != PATHS[dataset]
+        or link.fragment
+    ):
         raise ValueError("Untrusted MOPS document URL")
     params = parse_qs(link.query, keep_blank_values=True)
-    expected = {"co_id": stock_id, "year": str(year),
-                "month" if dataset == REVENUE else "season": f"{part:02d}" if dataset == REVENUE else str(part)}
+    expected = {
+        "co_id": stock_id,
+        "year": str(year),
+        "month" if dataset == REVENUE else "season": f"{part:02d}"
+        if dataset == REVENUE
+        else str(part),
+    }
     if any(params.get(key) != [value] for key, value in expected.items()):
         raise ValueError("Announcement period/link mismatch")
-    return {"period": period_date.strftime("%Y-%m") if dataset == REVENUE else period_date.isoformat(),
-            "published_at": published.isoformat(), "published_timestamp": stamp.isoformat(),
-            "document_url": raw["HYPERLINK"], "raw_announcement": raw,
-            "announcement_sha256": digest(raw)}
+    return {
+        "period": period_date.strftime("%Y-%m") if dataset == REVENUE else period_date.isoformat(),
+        "published_at": published.isoformat(),
+        "published_timestamp": stamp.isoformat(),
+        "document_url": raw["HYPERLINK"],
+        "raw_announcement": raw,
+        "announcement_sha256": digest(raw),
+    }
 
 
 class MopsAnnouncementClient:
@@ -115,21 +140,41 @@ class MopsAnnouncementClient:
         self.clock = clock or (lambda: datetime.now(UTC))
 
     def query(self, dataset, stock_id, start, as_of):
-        if dataset not in ITEMS or not re.fullmatch(r"\d{4,6}", stock_id) or day(start) > day(as_of):
+        if (
+            dataset not in ITEMS
+            or not re.fullmatch(r"\d{4,6}", stock_id)
+            or day(start) > day(as_of)
+        ):
             raise ValueError("Invalid MOPS query")
-        params = {"step": "00", "RADIO_CM": "2", "TYPEK": "", "CO_MARKET": "",
-                  "CO_ID": stock_id, "PRO_ITEM": ITEMS[dataset], "SUBJECT": "",
-                  "SDATE": query_date(start), "EDATE": query_date(as_of), "lang": "TW", "AN": ""}
+        params = {
+            "step": "00",
+            "RADIO_CM": "2",
+            "TYPEK": "",
+            "CO_MARKET": "",
+            "CO_ID": stock_id,
+            "PRO_ITEM": ITEMS[dataset],
+            "SUBJECT": "",
+            "SDATE": query_date(start),
+            "EDATE": query_date(as_of),
+            "lang": "TW",
+            "AN": "",
+        }
         try:
             # Own transport; never forward FinMind Authorization headers to MOPS.
-            response = self.transport.post(self.endpoint, data=params, timeout=20, allow_redirects=False)
+            response = self.transport.post(
+                self.endpoint, data=params, timeout=20, allow_redirects=False
+            )
             if response.status_code != 200:
                 raise ValueError("HTTP failure")
             payload = json.loads(response.content.decode("utf-8-sig").strip())
             rows = payload["data"]
             if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
                 raise ValueError("Invalid schema")
-            empty = payload.get("status") == "fail" and not rows and payload.get("message") == ["查無公告資料"]
+            empty = (
+                payload.get("status") == "fail"
+                and not rows
+                and payload.get("message") == ["查無公告資料"]
+            )
             if payload.get("status") != "success" and not empty:
                 raise ValueError("API failure")
             if len(rows) >= 1000:
@@ -138,12 +183,20 @@ class MopsAnnouncementClient:
             if now.tzinfo is None:
                 raise ValueError("Clock must be timezone-aware")
         except Exception:
-            raise VendorUnavailableError("MOPS announcement query unavailable or invalid; no dates inferred") from None
-        return {"dataset": dataset, "stock_id": stock_id, "query": params,
-                "source": "MOPS:ezSearch:" + ITEMS[dataset], "source_url": self.endpoint,
-                "retrieved_at": now.astimezone(UTC).isoformat(), "raw_rows": rows,
-                "raw_response_utf8": response.content.decode("utf-8"),
-                "response_sha256": hashlib.sha256(response.content).hexdigest()}
+            raise VendorUnavailableError(
+                "MOPS announcement query unavailable or invalid; no dates inferred"
+            ) from None
+        return {
+            "dataset": dataset,
+            "stock_id": stock_id,
+            "query": params,
+            "source": "MOPS:ezSearch:" + ITEMS[dataset],
+            "source_url": self.endpoint,
+            "retrieved_at": now.astimezone(UTC).isoformat(),
+            "raw_rows": rows,
+            "raw_response_utf8": response.content.decode("utf-8"),
+            "response_sha256": hashlib.sha256(response.content).hexdigest(),
+        }
 
 
 class MopsPublicationResolver:
@@ -160,38 +213,69 @@ class MopsPublicationResolver:
         if dataset not in ITEMS:
             return None
         stock_id = row["stock_id"]
-        key = (dataset, stock_id)
-        if key not in self.archives:
-            try:
-                archive = self.client.query(dataset, stock_id, self.start, self.as_of)
-                archive["warnings"] = []
-            except VendorUnavailableError:
-                archive = {"dataset": dataset, "stock_id": stock_id, "raw_rows": [],
-                           "warnings": ["MOPS unavailable; publication dates remain unknown"]}
-            self.archives[key] = archive
-        archive = self.archives[key]
         candidates = []
-        for raw in archive["raw_rows"]:
-            try:
-                candidate = parse_announcement(dataset, stock_id, raw)
-            except (ValueError, KeyError, TypeError):
-                archive["warnings"] = ["Invalid/unsupported announcement; excluded"]
-                continue
-            if candidate["period"] == row_period(dataset, row):
-                candidates.append(candidate)
+        period = row_period(dataset, row)
+        # Bound public queries by calendar year. Multi-year requests may silently
+        # fail upstream; retain each real response rather than fabricating a merge.
+        for year in range(
+            max(day(self.start).year, int(period[:4])),
+            min(day(self.as_of).year, int(period[:4]) + 1) + 1,
+        ):
+            key = (dataset, stock_id, year)
+            if key not in self.archives:
+                try:
+                    archive = self.client.query(
+                        dataset,
+                        stock_id,
+                        max(self.start, f"{year}-01-01"),
+                        min(self.as_of, f"{year}-12-31"),
+                    )
+                    archive["warnings"] = []
+                except VendorUnavailableError:
+                    archive = {
+                        "dataset": dataset,
+                        "stock_id": stock_id,
+                        "raw_rows": [],
+                        "warnings": ["MOPS unavailable; publication dates remain unknown"],
+                    }
+                self.archives[key] = archive
+            archive = self.archives[key]
+            for raw in archive["raw_rows"]:
+                try:
+                    candidate = parse_announcement(dataset, stock_id, raw)
+                except (ValueError, KeyError, TypeError):
+                    archive["warnings"] = ["Invalid/unsupported announcement; excluded"]
+                    continue
+                if candidate["period"] == period:
+                    candidates.append((candidate, archive))
         if not candidates:
             return None
         # Never choose the earliest announcement across corrections/resubmissions.
-        chosen = max(candidates, key=lambda item: item["published_timestamp"])
-        if len({digest(item) for item in candidates if item["published_timestamp"] == chosen["published_timestamp"]}) > 1:
+        chosen, archive = max(candidates, key=lambda item: item[0]["published_timestamp"])
+        if (
+            len(
+                {
+                    digest(item)
+                    for item, _ in candidates
+                    if item["published_timestamp"] == chosen["published_timestamp"]
+                }
+            )
+            > 1
+        ):
             return None
-        return {**chosen, "dataset": dataset, "stock_id": stock_id,
-                "source": archive["source"], "source_url": archive["source_url"],
-                "retrieved_at": archive["retrieved_at"], "value_row_sha256": digest(row),
-                "value_vintage": "capture_date_only; original_announcement_values_unverified"}
+        return {
+            **chosen,
+            "dataset": dataset,
+            "stock_id": stock_id,
+            "source": archive["source"],
+            "source_url": archive["source_url"],
+            "retrieved_at": archive["retrieved_at"],
+            "value_row_sha256": digest(row),
+            "value_vintage": "capture_date_only; original_announcement_values_unverified",
+        }
 
     def audit(self, stock_id):
-        return [value for (_, code), value in sorted(self.archives.items()) if code == stock_id]
+        return [value for (_, code, _), value in sorted(self.archives.items()) if code == stock_id]
 
 
 def validate_publication(dataset, row, proof, value_retrieved_at):
@@ -201,12 +285,15 @@ def validate_publication(dataset, row, proof, value_retrieved_at):
     for field in parsed:
         if proof[field] != parsed[field]:
             raise ValueError("Publication evidence modified")
-    if (proof["dataset"] != dataset or proof["stock_id"] != stock_id
-            or proof["value_row_sha256"] != digest(row)
-            or proof["period"] != row_period(dataset, row)
-            or proof["source"] != "MOPS:ezSearch:" + ITEMS[dataset]
-            or proof["source_url"] != MopsAnnouncementClient.endpoint
-            or proof["value_vintage"] != "capture_date_only; original_announcement_values_unverified"):
+    if (
+        proof["dataset"] != dataset
+        or proof["stock_id"] != stock_id
+        or proof["value_row_sha256"] != digest(row)
+        or proof["period"] != row_period(dataset, row)
+        or proof["source"] != "MOPS:ezSearch:" + ITEMS[dataset]
+        or proof["source_url"] != MopsAnnouncementClient.endpoint
+        or proof["value_vintage"] != "capture_date_only; original_announcement_values_unverified"
+    ):
         raise ValueError("Publication evidence does not bind this value row")
     captured = max(instant(proof["retrieved_at"]), instant(value_retrieved_at))
     if instant(proof["published_timestamp"]) > captured:
