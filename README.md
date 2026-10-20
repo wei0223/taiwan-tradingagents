@@ -530,6 +530,12 @@ See [historical source capture and dual-track validation](docs/taiwan/history-va
 for annual MOPS publication windows, multi-year official calendars, original statement
 parsing, pending Q3 nowcasts and explicitly labeled revised-data diagnostics.
 
+The shared report template displays all three analyst narratives, their stronger arguments,
+disagreements and explicit revision conditions in the main body. Structured `--analysts`
+notes bind to company/date, with portable source references and separate issue/data dates.
+See [report inputs and reading acceptance](docs/taiwan/report-reading.md); missing editorial
+sections or unbound citations are shown as review gaps, never automatic research approval.
+
 The extended Sponsor workflow also runs credential-free `research acceptance` after its
 source audit, producing a portable three-analyst report and machine-readable acceptance
 receipt for each symbol. Missing reviewed EPS assumptions stay unavailable; operational
