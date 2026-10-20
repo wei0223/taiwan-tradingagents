@@ -80,6 +80,9 @@ quota|auth|timeout|agent_failure|validation` 保存狀態。不要不斷重試�
 正文只含基本面、技術面、籌碼面三位分析師；獨立多空與風險原稿保留作附錄。
 `--review-input` 的公司專屬原件／附註／版本橋接契約見
 [審查規則](../../../docs/taiwan/review-rules.md)。審查規則由程式計算，分析師據此解釋。
+`--analysts` 使用 [閱讀版輸入契約](../../../docs/taiwan/report-reading.md) 的公司／日期綁定格式，
+三位都要有立場、較強論點、關鍵分歧、證據改變、完整論述與逐項改判條件。
+`reading-review.json` 只驗結構及引用；不能當作文字屬實、瀏覽器視覺或模型績效已驗收。
 沒有經核對的原件或回款證據明列不可用，不能套用別家公司的利潤率、股數或倍數。
 若追蹤既有預測，傳入原 `--release` 及選版 `--actuals`；沒有新實績則省略 actuals，
 維持 pending。原數值與發布時間不得變動；新模型必須另建版本與發布紀錄。

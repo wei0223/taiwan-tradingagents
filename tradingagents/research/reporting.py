@@ -12,20 +12,29 @@ from .bundle import build_bundle, fingerprint
 from .debate import write_json
 from .dynamics import conditional_decision, reward_risk, rolling
 from .quality import audit_html, industry_review, source_audit
+from .report_view import (
+    CSS,
+    ROLE_LABELS,
+    introduction,
+    normalize_notes,
+    prepare_sources,
+    role_notes,
+    sources_section,
+)
 from .review import review
 from .scenarios import check_assumption, forecast
 
 
 def table(headers, rows):
     return (
-        '<div class="scroll"><table><tr>'
-        + "".join("<th>" + html.escape(str(h)) + "</th>" for h in headers)
-        + "</tr>"
+        '<div class="scroll" tabindex="0" role="region" aria-label="資料表，可左右捲動"><table><thead><tr>'
+        + "".join('<th scope="col">' + html.escape(str(h)) + "</th>" for h in headers)
+        + "</tr></thead><tbody>"
         + "".join(
             "<tr>" + "".join("<td>" + html.escape(str(c)) + "</td>" for c in row) + "</tr>"
             for row in rows
         )
-        + "</table></div>"
+        + "</tbody></table></div>"
     )
 
 
@@ -85,6 +94,9 @@ def package(
             "Explicit illustrative entry/loss assumptions; not fills or guaranteed exits"
         )
     stock, as_of = bundle["stock_id"], bundle["as_of"]
+    notes, missing_notes = normalize_notes(analyst_prose, stock, as_of)
+    source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
+    unresolved_refs = set()
     reviewed = review(stock, as_of, review_input, model, snapshot=snapshot)
     sealed = None
     if release_path is not None:
@@ -130,7 +142,7 @@ def package(
         specification and specification.get("created_at", "")[:10] > as_of
     )
     summary = (
-        "<h2>分項裁決</h2><p>已實現每股獲利、現金持續性、估值與短期交易分開判斷。"
+        '<section id="verdict"><h2>分項裁決</h2><p>已實現每股獲利、現金持續性、估值與短期交易分開判斷。'
         "沒有證明低估不等於證明高估；會計獲利不等於現金回收或股票總報酬。</p>"
     )
     labels = {
@@ -245,14 +257,15 @@ def package(
             + html.escape(str(specification.get("created_at", "未提供")))
             + "。本次為封存資料的回顧式條件建模，並非原分析日已封存的預測，不得作歷史預測績效。</p>"
         )
-    prose = analyst_prose or {}
+    summary += "</section>"
+    analyst_sections = ""
     roles = [
         ("fundamental", "基本面分析師"),
         ("technical", "技術面分析師"),
         ("institutional", "籌碼面分析師"),
     ]
     for role, label in roles:
-        body = "".join("<p>" + html.escape(p) + "</p>" for p in prose.get(role, []))
+        body = role_notes(role, notes[role], evidence_refs, unresolved_refs)
         if role == "fundamental":
             body += "<p>營收規模、利潤率與現金轉換分開判斷；未取得的產品組合與同業資料明列缺口。歷史成長不直接保證估值吸引力。</p>"
             earnings = reviewed["axes"]["accounting_earnings"]
@@ -265,14 +278,18 @@ def package(
                         prior["period_start"] + " 至 " + prior["period_end"],
                     ],
                     [
-                        [label, current[key], prior[key]]
-                        for key, label in [
-                            ("parent_profit_twd", "歸母淨利（TWD）"),
-                            ("eps_twd", "精算稀釋 EPS（元）"),
-                            ("diluted_numerator_twd", "稀釋分子（TWD）"),
-                            ("diluted_weighted_shares", "稀釋加權股數（股）"),
-                            ("operating_margin", "營益率（比率）"),
-                            ("parent_margin", "歸母率（比率）"),
+                        [
+                            label,
+                            f"{current[key] / scale:,.{digits}f}" + suffix,
+                            f"{prior[key] / scale:,.{digits}f}" + suffix,
+                        ]
+                        for key, label, scale, digits, suffix in [
+                            ("parent_profit_twd", "歸母淨利（億元）", 1e8, 2, ""),
+                            ("eps_twd", "精算稀釋 EPS（元）", 1, 6, ""),
+                            ("diluted_numerator_twd", "稀釋分子（億元）", 1e8, 2, ""),
+                            ("diluted_weighted_shares", "稀釋加權股數（百萬股）", 1e6, 3, ""),
+                            ("operating_margin", "營益率", 0.01, 2, "%"),
+                            ("parent_margin", "歸母率", 0.01, 2, "%"),
                         ]
                     ],
                 )
@@ -291,11 +308,13 @@ def package(
                             "累計期間（不可稱單季）",
                             observed["period_start"] + " 至 " + observed["period_end"],
                         ],
-                        ["累計 CFO（TWD）", observed["values"]["cfo_twd"]],
-                        ["累計營收（TWD）", observed["values"]["revenue_twd"]],
+                        ["累計 CFO（億元）", f"{observed['values']['cfo_twd'] / 1e8:,.2f}"],
+                        ["累計營收（億元）", f"{observed['values']['revenue_twd'] / 1e8:,.2f}"],
                         [
-                            "單季 CFO（TWD）",
-                            cash.get("single_quarter", {}).get("cfo_twd", "不可用：待版本銜接"),
+                            "單季 CFO（億元）",
+                            f"{cash['single_quarter']['cfo_twd'] / 1e8:,.2f}"
+                            if "single_quarter" in cash
+                            else "不可用：待版本銜接",
                         ],
                         ["回款確認", "不可用：不能從餘額或 CFO 推定"],
                     ],
@@ -305,8 +324,8 @@ def package(
                 body += table(
                     ["同期間同比檢查", "程式計算"],
                     [
-                        ["CFO 絕對變化（TWD）", compared["cfo_change_twd"]],
-                        ["CFO／營收比變化（百分點）", compared["ratio_change_pp"]],
+                        ["CFO 絕對變化（億元）", f"{compared['cfo_change_twd'] / 1e8:,.2f}"],
+                        ["CFO／營收比變化（百分點）", f"{compared['ratio_change_pp']:,.2f}"],
                     ],
                 )
                 body += "<p>絕對資金需求與每元營收的現金流出可能朝不同方向變化；兩者都要看，不自行加回正常化 CFO。</p>"
@@ -391,7 +410,7 @@ def package(
                         [
                             w,
                             f"報酬 {r['return_pct']:.2f}%；MA 單日變動 {r['ma_one_session_change']:.3f}；ATR {r['atr_simple_mean']:.3f}",
-                            f"突破 {r['breakout_previous_window_high']}；單日假突破規則 {r['false_breakout_one_session_rule']}",
+                            f"窗口區間突破：{'已觀測' if r['breakout_previous_window_high'] else '未觀測'}；單日假突破規則：{'符合' if r['false_breakout_one_session_rule'] else '未符合'}",
                         ]
                     )
                 else:
@@ -399,7 +418,19 @@ def package(
                         [
                             w,
                             "；".join(
-                                f"{n}: {g['window_net_shares'] if g['window_net_shares'] is not None else '不可用'} 股"
+                                (
+                                    {
+                                        "foreign": "外資",
+                                        "investment_trust": "投信",
+                                        "dealer": "自營商",
+                                    }.get(n, n)
+                                    + ": "
+                                    + (
+                                        f"{g['window_net_shares'] / 1000:,.2f} 張"
+                                        if g["window_net_shares"] is not None
+                                        else "不可用"
+                                    )
+                                )
                                 for n, g in r["institutions"].items()
                             ),
                             r["start"] + " 至 " + r["end"],
@@ -407,7 +438,26 @@ def package(
                     )
             body += table(["視窗（交易日）", "程式計算", "觀測範圍／判定"], rows)
             body += "<p>技術型態為明示機械規則，並非已驗證勝率；ATR 使用真實波幅簡單平均。缺日不補零，法人淨額不代表全部籌碼或因果證明。</p>"
-        details += "<details><summary>" + label + "完整分析</summary>" + body + "</details>"
+        analyst_sections += (
+            '<section class="analyst" id="analyst-'
+            + role
+            + '"><h2>'
+            + ROLE_LABELS[role]
+            + "</h2>"
+            + body
+            + "</section>"
+        )
+    result["reading_review"] = {
+        "template_version": 2,
+        "analyst_roles": [role for role, _ in roles],
+        "missing_editorial_fields": missing_notes,
+        "unresolved_evidence": sorted(unresolved_refs),
+        "status": "complete_structure"
+        if not any(missing_notes.values()) and not unresolved_refs
+        else "editorial_review_required",
+        "semantic_truth_verified_by_template": False,
+        "visual_browser_review": "not_performed_by_template",
+    }
     if sealed is not None:
         from .tracking import read_tracking, track
 
@@ -437,33 +487,45 @@ def package(
             "research.json contains original document bytes; sha256 retained here"
         )
     details += (
-        "<details><summary>來源、計算與模型完整稽核</summary><pre>"
+        '<details class="machine-audit no-print"><summary>來源、計算與模型完整稽核</summary><pre>'
         + html.escape(json.dumps(display, ensure_ascii=False, indent=2))
         + "</pre></details>"
     )
-    css = "body{font:16px/1.8 system-ui;background:#f1f4f7;color:#193047;margin:0}main{max-width:1050px;margin:24px auto;background:white;padding:40px}h1{border-top:6px solid #193047;padding-top:18px}h2{font-size:22px}table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:10px;border-bottom:1px solid #dce4eb;text-align:left;vertical-align:top}th{background:#edf2f7}.scroll{overflow:auto}details{padding:18px 0;border-top:1px solid #ccd6df}summary{cursor:pointer;font-weight:bold}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}@media print{main{margin:0;padding:12px}.appendix{break-before:page}}"
+    reading_gap = (
+        '<p class="reading-gap">本版尚缺分析師裁決欄位或有未綁定引用；'
+        "結構檢查不代表研究論點已被驗證，詳見 reading-review.json。</p>"
+        if result["reading_review"]["status"] != "complete_structure"
+        else ""
+    )
     page = (
-        '<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'
+        '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'
         + stock
         + " 研究升級版</title><style>"
-        + css
-        + "</style><main><h1>"
-        + stock
-        + " 三分析師研究報告</h1><p>分析資料日："
-        + as_of
-        + "｜資料版本 "
-        + fingerprint(snapshot)[:12]
-        + "｜程式模型與編輯論述，未執行新獨立 Agent</p>"
+        + CSS
+        + "</style></head><body><main>"
+        + introduction(stock, as_of, result["generated_at"], dynamics.get("latest_session"))
+        + reading_gap
         + summary
-        + '<div class="appendix">'
+        + analyst_sections
+        + sources_section(source_entries, review_input)
         + details
-        + "</div></main></html>"
+        + "<footer>資料版本 "
+        + fingerprint(snapshot)[:12]
+        + ' · <a href="reading-review.json">閱讀結構檢查</a> · <a href="research.json">完整計算</a>'
+        + "。此版面不代表模型或交易策略已有績效證明。</footer></main></body></html>"
     )
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
     result["html_audit"] = links
     output.mkdir(parents=True, exist_ok=True)
+    for path, content in review_assets.items():
+        target = output / path
+        target.parent.mkdir(exist_ok=True)
+        target.write_bytes(content)
+    write_json(output / "snapshot.json", snapshot)
+    write_json(output / "analysts.json", analyst_prose or {})
+    write_json(output / "reading-review.json", result["reading_review"])
     write_json(output / "review.json", reviewed)
     write_json(output / "review-input.json", review_input or {})
     if sealed is not None:
@@ -487,6 +549,15 @@ def package(
             "html_sha256": hashlib.sha256(page.encode()).hexdigest(),
             "review_sha256": reviewed["review_sha256"],
             "review_input_sha256": fingerprint(review_input or {}),
+            "portable_assets_sha256": {
+                path: hashlib.sha256((output / path).read_bytes()).hexdigest()
+                for path in [
+                    *review_assets,
+                    "snapshot.json",
+                    "analysts.json",
+                    "reading-review.json",
+                ]
+            },
         },
     )
     return result
