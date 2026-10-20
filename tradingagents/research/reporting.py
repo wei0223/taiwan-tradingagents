@@ -47,6 +47,9 @@ def package(
     review_input=None,
     release_path=None,
     actuals=None,
+    extension_input=None,
+    debate_input=None,
+    pdf_font=None,
 ):
     output = Path(output_dir)
     # Review editions must never overwrite a delivered report or a sealed source run.
@@ -55,6 +58,20 @@ def package(
         raise ValueError("Use a new output directory for every report/review edition")
     if actuals is not None and release_path is None:
         raise ValueError("Actuals require an original sealed release")
+    plan_spec = (extension_input or {}).get("research_plan")
+    if plan_spec:
+        from .knowledge import context
+        from .scenarios import timestamp
+        from .vintages import verify_receipt_times
+
+        ctx = context(plan_spec["context"], snapshot["instrument"]["stock_id"], snapshot["as_of"])
+        review_input = copy.deepcopy(review_input or {"stock_id": snapshot["instrument"]["stock_id"]})
+        if review_input.get("cutoff_at") and timestamp(review_input["cutoff_at"]) != timestamp(ctx["cutoff_at"]):
+            raise ValueError("Review and research plan must use the same exact cutoff")
+        review_input["cutoff_at"] = ctx["cutoff_at"]
+        if ctx["mode"] != "retrospective_diagnostic":
+            verify_receipt_times(snapshot, timestamp(ctx["cutoff_at"]))
+            verify_receipt_times(review_input or {}, timestamp(ctx["cutoff_at"]))
     bundle = build_bundle(snapshot)
     audit = source_audit(snapshot)
     if audit["status"] != "passed":
@@ -98,6 +115,13 @@ def package(
     source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
     unresolved_refs = set()
     reviewed = review(stock, as_of, review_input, model, snapshot=snapshot)
+    from .extension_view import render as render_extension
+    from .research_debate import validate as validate_research_debate
+    from .research_extension import build as build_extension
+
+    extra = build_extension(snapshot, reviewed, review_input, dynamics, extension_input)
+    debate_review = validate_research_debate(debate_input, stock, snapshot, review_input)
+    dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
     sealed = None
     if release_path is not None:
         from .publication import read_release
@@ -128,7 +152,9 @@ def package(
             "predictions_sha256": fingerprint(sealed["predictions"]) if sealed else None,
             "model_changed": False,
         },
-        "independent_agents_executed": False,
+        "extension": extra,
+        "debate_review": debate_review,
+        "independent_agents_executed": debate_review["independent_agents_executed"],
         "prediction_accuracy": {"status": "pending_future_actuals", "mae": None},
         "strategy_performance": {
             "status": "unavailable",
@@ -139,7 +165,8 @@ def package(
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
     result["retrospective_model"] = bool(
-        specification and specification.get("created_at", "")[:10] > as_of
+        (specification and specification.get("created_at", "")[:10] > as_of)
+        or (extra["financial_cases"] and result["generated_at"][:10] > as_of)
     )
     summary = (
         '<section id="verdict"><h2>分項裁決</h2><p>已實現每股獲利、現金持續性、估值與短期交易分開判斷。'
@@ -505,8 +532,10 @@ def package(
         + "</style></head><body><main>"
         + introduction(stock, as_of, result["generated_at"], dynamics.get("latest_session"))
         + reading_gap
+        + dashboard
         + summary
         + analyst_sections
+        + extension_appendix
         + sources_section(source_entries, review_input)
         + details
         + "<footer>資料版本 "
@@ -528,8 +557,17 @@ def package(
     write_json(output / "reading-review.json", result["reading_review"])
     write_json(output / "review.json", reviewed)
     write_json(output / "review-input.json", review_input or {})
+    write_json(output / "source-ledger.json", [{"id": key, **{k: v for k, v in doc.items() if k not in {"content_base64", "rows", "raw_response_utf8", "raw_rows"}}} for key, doc in (review_input or {}).get("documents", {}).items()])
+    write_json(output / "extension.json", extra)
+    write_json(output / "extension-input.json", extension_input or {})
+    write_json(output / "debate-review.json", debate_review)
+    write_json(output / "debate-input.json", debate_input or {})
+    write_json(output / "bundle.json", bundle)
     if sealed is not None:
         write_json(output / "forecast-preservation.json", result["forecast_preservation"])
+        sealed_copy = output / "sealed-releases" / stock / Path(release_path).name
+        sealed_copy.parent.mkdir(parents=True, exist_ok=True)
+        sealed_copy.write_bytes(Path(release_path).read_bytes())
     if model["status"] == "ready":
         documents = output / "documents"
         documents.mkdir(exist_ok=True)
@@ -560,4 +598,11 @@ def package(
             },
         },
     )
+    from .delivery import seal
+
+    if pdf_font is not None:
+        from .paper_report import render_pdf
+
+        render_pdf(output, pdf_font)
+    seal(output)
     return result

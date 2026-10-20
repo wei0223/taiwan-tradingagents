@@ -14,7 +14,7 @@ from .bundle import build_bundle, check_dates, fingerprint, reject_secret
 from .debate import STAGES, load_json, load_run, register_agent, start_run, stop, submit, write_json
 
 
-def main(argv=None, provider=None):
+def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare", help="Fetch once and create evidence-only run folders")
@@ -27,6 +27,7 @@ def main(argv=None, provider=None):
                          help="Archive MOPS dates; numeric vintages usable only from capture date")
     prepare.add_argument("--extended", action="store_true", help="Add valuation, statements, adjusted prices, news/social and official sessions")
     prepare.add_argument("--news-days", type=int, default=3)
+    prepare.add_argument("--material-events", action="store_true", help="Capture recent all-category official announcements; originals still require review")
     prepare.add_argument("--archive-dir", type=Path, help="Persist immutable captured versions")
     imported = commands.add_parser("from-snapshot", help="Create a run from an already saved snapshot")
     imported.add_argument("--snapshot", type=Path, required=True)
@@ -82,6 +83,10 @@ def main(argv=None, provider=None):
     upgrade.add_argument("--review-input", type=Path, help="Named-reviewer source packets; never infer missing statement semantics")
     upgrade.add_argument("--release", type=Path, help="Original sealed release; preserve issue time and predictions")
     upgrade.add_argument("--actuals", type=Path, help="Explicit selected actual revision list; requires --release")
+    upgrade.add_argument("--extension-input", type=Path, help="Company-specific source-reviewed drivers, cash detail, valuation and frozen replay configuration")
+    upgrade.add_argument("--research-plan", type=Path, help="Exact mode/cutoff, material announcement coverage, capital and four-quarter models")
+    upgrade.add_argument("--debate-input", type=Path, help="Actual independent openings, rebuttals, risk and evidence-led rulings")
+    upgrade.add_argument("--pdf-font", type=Path, help="Optional PDF edition: installed CJK TrueType font; requires reportlab")
     validation = commands.add_parser("validate-forecasts", help="Score sealed forecasts only after actual publication")
     validation.add_argument("--input", type=Path, required=True)
     validation.add_argument("--output", type=Path, required=True)
@@ -128,12 +133,21 @@ def main(argv=None, provider=None):
         if args.command == "upgrade":
             from .reporting import package
 
-            result = package(load_json(args.snapshot), args.output_dir,
+            snapshot = load_json(args.snapshot)
+            extension = load_json(args.extension_input) if args.extension_input else None
+            if args.research_plan:
+                extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
+                if extension.get("research_plan"):
+                    raise ValueError("Supply one research plan only")
+                extension["research_plan"] = load_json(args.research_plan)
+            result = package(snapshot, args.output_dir,
                              load_json(args.model) if args.model else None,
                              load_json(args.industry) if args.industry else None,
                              load_json(args.analysts) if args.analysts else None,
                              load_json(args.review_input) if args.review_input else None,
-                             args.release, load_json(args.actuals) if args.actuals else None)
+                             args.release, load_json(args.actuals) if args.actuals else None,
+                             extension,
+                             load_json(args.debate_input) if args.debate_input else None, args.pdf_font)
             print(json.dumps({"stock_id": result["stock_id"], "decision": result["decision"]["state"],
                               "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"],
                               "review_axes": {k: v["status"] for k, v in result["review"]["axes"].items()}}))
@@ -165,6 +179,19 @@ def main(argv=None, provider=None):
             for symbol in symbols:
                 try:
                     snapshot = provider.snapshot(symbol, args.start, args.as_of)
+                    if args.material_events:
+                        from datetime import date, timedelta
+
+                        from tradingagents.dataflows.taiwan.material_events import (
+                            MaterialEventClient,
+                        )
+
+                        client = material_client or MaterialEventClient()
+                        beginning = max(args.start, (date.fromisoformat(args.as_of)-timedelta(days=90)).isoformat())
+                        try:
+                            snapshot["material_event_audit"] = client.query(snapshot["instrument"]["stock_id"], beginning, args.as_of)
+                        except VendorError as exc:
+                            snapshot["material_event_audit"] = {**getattr(exc, "failure_receipt", {}), "status": "unavailable", "rows": []}
                     reject_secret(snapshot, token)
                     bundle = build_bundle(snapshot)
                     if args.archive_dir:

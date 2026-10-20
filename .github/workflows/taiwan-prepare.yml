@@ -55,7 +55,7 @@ jobs:
           EXTENDED_RESEARCH: ${{ inputs.extended }}
         run: |
           options=(--require-token --output-dir research-data --archive-dir research-data/vintages)
-          if [ "$EXTENDED_RESEARCH" = "true" ]; then options+=(--extended); fi
+          if [ "$EXTENDED_RESEARCH" = "true" ]; then options+=(--extended --material-events); fi
           if [ "$MOPS_PUBLICATIONS" = "true" ]; then options+=(--mops-publications); fi
           python -m tradingagents.research prepare "${options[@]}"
       - name: Audit captured evidence without credentials

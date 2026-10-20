@@ -29,6 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+research-pdf = ["reportlab"]
 dev = [
     "ruff>=0.16",
     "pytest>=8.0",

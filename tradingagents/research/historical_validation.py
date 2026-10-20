@@ -105,14 +105,19 @@ def short_horizon(
     bars, sessions, start, end, horizon=20, fee_bps=14.25, tax_bps=30, slippage_bps=5
 ):
     if (
-        horizon not in [5, 20]
+        horizon not in [5, 10, 20]
         or not bars
         or [b["date"] for b in bars] != sessions
         or sessions != sorted(set(sessions))
     ):
-        raise ValueError("Complete calendar and fixed 5/20 horizon required")
+        raise ValueError("Complete calendar and fixed 5/10/20 horizon required")
     if min(finite(x) for x in [fee_bps, tax_bps, slippage_bps]) < 0:
         raise ValueError("Nonnegative costs required")
+    for bar in bars:
+        o, h, low, c = (finite(bar[k]) for k in ("open", "high", "low", "close"))
+        volume = finite(bar["volume"])
+        if not (0 < low <= min(o, c) <= max(o, c) <= h) or volume < 0 or not volume.is_integer():
+            raise ValueError("Missing/nontradeable OHLCV cannot enter a return simulation")
     buy = (fee_bps + slippage_bps) / 10000
     sell = (fee_bps + tax_bps + slippage_bps) / 10000
     if max(buy, sell) >= 1:
@@ -173,6 +178,14 @@ def short_horizon(
             )
             continue
         net = exit_price * (1 - sell) / (price * (1 + buy)) - 1
+        marks = [1.0] + [
+            bars[j]["close"] * (1 - sell) / (price * (1 + buy))
+            for j in range(entry, exit_idx)
+        ] + [1 + net]
+        peak, drawdown = 1.0, 0.0
+        for mark in marks:
+            peak = max(peak, mark)
+            drawdown = min(drawdown, mark / peak - 1)
         baseline = (
             None
             if terminal >= len(bars) or sessions[terminal] > end
@@ -187,6 +200,7 @@ def short_horizon(
                 "exit_price": exit_price,
                 "exit_reason": reason,
                 "net_return": net,
+                "marked_close_max_drawdown": drawdown,
                 "same_entry_horizon_hold_net_return": baseline,
                 "entry_price_capture_is_contemporary_not_historical": True,
             }
@@ -203,8 +217,12 @@ def short_horizon(
         "pending": pending,
         "skipped": skipped,
         "count": len(events),
-        "net_win_rate": mean(x["net_return"] > 0 for x in events) if events else None,
-        "mean_net_return": mean(x["net_return"] for x in events) if events else None,
+        "net_win_rate": mean(x["net_return"] > 0 for x in events) if len(events) >= 30 else None,
+        "mean_net_return": mean(x["net_return"] for x in events) if len(events) >= 30 else None,
+        "aggregate_statistics_suppressed": len(events) < 30,
+        "worst_trade_marked_close_drawdown": min(
+            (x["marked_close_max_drawdown"] for x in events), default=None
+        ),
         "paired_exit_rule_difference": mean(
             x["net_return"] - x["same_entry_horizon_hold_net_return"] for x in paired
         )
