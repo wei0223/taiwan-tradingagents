@@ -102,8 +102,23 @@ def main(argv=None, provider=None, material_client=None):
     tracking.add_argument("--release", type=Path, required=True)
     tracking.add_argument("--actuals", type=Path)
     tracking.add_argument("--output-dir", type=Path, required=True)
+    parameter = commands.add_parser("score-parameter", help="Append a versioned operating-parameter forecast comparison")
+    parameter.add_argument("--release", type=Path, required=True)
+    parameter.add_argument("--actual", type=Path, required=True)
+    parameter.add_argument("--evaluated-at", required=True)
+    parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "score-parameter":
+            from .parameter_tracking import score
+
+            if args.output.exists() or args.output.resolve() in {args.release.resolve(), args.actual.resolve()}:
+                raise ValueError("Use a new parameter evaluation output; originals cannot be overwritten")
+            result = score(load_json(args.release), load_json(args.actual), args.evaluated_at)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, result)
+            print(json.dumps({"status": result["status"]}))
+            return 0
         if args.command == "track-release":
             from .tracking import read_tracking, track
 

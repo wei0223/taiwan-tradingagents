@@ -114,6 +114,7 @@ def waterfall(inputs):
         "operating_profit_twd": operating,
         "pretax_profit_twd": pretax,
         "tax_twd": tax,
+        "tax_rate": v["tax_rate"],
         "consolidated_profit_twd": net,
         "noncontrolling_profit_twd": noncontrolling,
         "parent_profit_twd": parent,

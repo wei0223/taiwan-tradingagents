@@ -562,6 +562,13 @@ are separate. See [research completeness and daily integration](docs/taiwan/rese
 for the CLI, evidence contracts and limitations. No paid LLM API or order execution
 is used by this research path.
 
+Research acceptance now reconciles the captured official announcement index with
+reviewed originals, preserves fixed PE sample/version receipts, and grades future
+earnings outputs separately from issued-share reference quotients. Explicit joint
+sensitivities, dilution arithmetic and raw-price execution checks do not establish
+calibrated predictions or trading alpha. See the [v3 acceptance contracts](docs/taiwan/v3-acceptance.md)
+for blocked-source states, reproducibility, parameters and clustered evaluation.
+
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citation

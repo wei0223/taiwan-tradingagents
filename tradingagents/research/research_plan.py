@@ -192,6 +192,85 @@ def build(spec, stock, as_of, documents, evidence, snapshot=None):
                 "ex_ante_performance": False,
             }
         )
+    from .model_disclosure import describe, parameters, sensitivity
+
+    reference = spec.get("per_share_reference")
+    if reference and reference.get("source_id") not in eligible:
+        raise ValueError("Per-share reference source unavailable")
+    if reference:
+        packet = reference.get("source_packet")
+        if not packet or reference["source_id"] not in packet["document_ids"]:
+            raise ValueError("Per-share reference needs the reviewed issuer capital packet")
+        amounts = _packet(
+            packet,
+            stock,
+            documents,
+            knowledge.exact(ctx["cutoff_at"]),
+            ("issued_shares",),
+            allowed_scopes=("issuer",),
+        )
+        if amounts["issued_shares"] != evidence.get(reference["evidence_id"]):
+            raise ValueError("Per-share reference differs from reviewed capital original")
+    disclosures = describe(forward, reference, evidence)
+    parameter_table = parameters(
+        spec["industry_kind"],
+        spec.get("parameter_register", {}),
+        documents,
+        eligible,
+        industry_models.FIELDS.get(spec["industry_kind"], ()),
+    )
+    for row in parameter_table["parameters"]:
+        if row.get("kind") == "fact" and (
+            row["numeric_evidence_id"] not in evidence
+            or row["value"] != evidence[row["numeric_evidence_id"]]
+        ):
+            raise ValueError("Parameter fact differs from bound evidence")
+    illustrative = forward_model.build(
+        as_of,
+        spec.get("illustrative_profit_scenarios"),
+        evidence,
+        audit["announced_earnings_periods"],
+    )
+    illustrative_disclosure = describe(illustrative, reference, evidence)
+    illustrative_sensitivities = {
+        name: [
+            {
+                "period": c["period"],
+                **sensitivity(c, spec.get("sensitivity", {}).get(c["period"], {})),
+            }
+            for c in scenario["quarters"]
+        ]
+        for name, scenario in illustrative.get("scenarios", {}).items()
+    }
+    if snapshot:
+        price_rows = snapshot.get("datasets", {}).get("TaiwanStockPrice", {}).get("records", [])
+        if price_rows:
+            priced = max(price_rows, key=lambda r: r["data_date"])
+            for total in illustrative_disclosure["four_quarter_reference_totals"].values():
+                quotient = total["four_quarter_parent_profit_per_current_issued_share_twd"]
+                total["price_reference"] = {
+                    "date": priced["data_date"],
+                    "close_twd": priced["values"]["close"],
+                    "raw_sha256": priced.get("raw_sha256"),
+                }
+                total["conditional_market_cap_to_parent_profit_multiple"] = (
+                    priced["values"]["close"] / quotient
+                    if quotient is not None and quotient > 0
+                    else None
+                )
+                total["not_forward_pe"] = True
+    illustrative_disclosure["label"] = (
+        "historical_ratio_held_constant_illustration_not_expected_forecast"
+    )
+    sensitivities = {}
+    for name, scenario in forward.get("scenarios", {}).items():
+        sensitivities[name] = [
+            {
+                "period": c["period"],
+                **sensitivity(c, spec.get("sensitivity", {}).get(c["period"], {})),
+            }
+            for c in scenario["quarters"]
+        ]
     return {
         "status": "reviewed_with_gaps"
         if audit["status"] == "incomplete"
@@ -199,6 +278,13 @@ def build(spec, stock, as_of, documents, evidence, snapshot=None):
         "context": ctx,
         "completeness": audit,
         "capital": capital,
+        "financial_output_disclosure": disclosures,
+        "illustrative_profit_disclosure": illustrative_disclosure,
+        "illustrative_sensitivity": illustrative_sensitivities,
+        "parameter_register": parameter_table,
+        "sensitivity_analysis": sensitivities,
+        "formal_valuation_allowed": audit.get("formal_valuation_allowed", False)
+        and forward["capital_reconciled"],
         "operating_model": operating,
         "forward": forward,
         "expectations": comparison,

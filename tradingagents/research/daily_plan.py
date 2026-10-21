@@ -46,9 +46,11 @@ def prepare(snapshot, review_input=None, clock=None):
             "revision_id": "current-material-search-" + archive["sha256"],
             "publication_time_status": "unknown_current_revision",
         }
+    from .announcement_coverage import CATEGORIES, classify
+
     events = []
     for i, row in enumerate(archive.get("rows", [])):
-        if row.get("AN_CODE") not in {"M11", "M36", "M20", "M22", "M19", "M31", "M99", "F03"}:
+        if not classify(row) and row.get("AN_CODE") not in {"M20", "M22", "M19", "M99"}:
             continue
         subject = row["SUBJECT"]
         y, m, d = map(int, row["CDATE"].split("/"))
@@ -75,10 +77,22 @@ def prepare(snapshot, review_input=None, clock=None):
                 "reason": "Search discovered event; official original and financial impact require review",
             }
         )
+    declared = []
+    if archive.get("query", {}).get("SDATE"):
+        y, m, d = map(int, archive["query"]["SDATE"].split("/"))
+        declared = [
+            {
+                "category": key,
+                "document_id": "material_search",
+                "from_at": f"{y + 1911}-{m:02d}-{d:02d}T00:00:00+08:00",
+                "through_at": cutoff.isoformat(),
+            }
+            for key in CATEGORIES
+        ]
     plan = {
         "context": {"stock_id": stock, "mode": mode, "cutoff_at": cutoff.isoformat()},
         "inventory": events,
-        "coverage": [],
+        "coverage": declared,
         "industry_kind": profile(stock)["key"],
         "operating_inputs": {},
         "forward_scenarios": None,

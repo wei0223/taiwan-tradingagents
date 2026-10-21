@@ -24,7 +24,7 @@ def sample_summary(events, minimum=30):
     }
 
 
-def run(bars, sessions, folds, config, data_receipt, company):
+def run(bars, sessions, folds, config, data_receipt, company, execution_bars=None):
     """No tuning within folds. Captures today can only produce diagnostics of past folds.
 
     True OOS requires both an immutable plan and the *inputs* known before the
@@ -62,7 +62,15 @@ def run(bars, sessions, folds, config, data_receipt, company):
         # batch endpoint never upgrades current full-history bars to strict OOS.
         horizons = {}
         for horizon in (5, 10, 20):
-            result = short_horizon(bars, sessions, start, end, horizon, **config.get("costs", {}))
+            result = short_horizon(
+                bars,
+                sessions,
+                start,
+                end,
+                horizon,
+                **config.get("costs", {}),
+                execution_bars=execution_bars,
+            )
             result.update(sample_summary(result["events"]))
             returns = [e["net_return"] for e in result["events"]]
             result["return_distribution"] = {

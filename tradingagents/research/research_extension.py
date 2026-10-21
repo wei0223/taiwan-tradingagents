@@ -204,6 +204,7 @@ def backtest(snapshot, config):
             "empirical_edge_proven": False,
         }
     bars = [{"date": day, "basis": "vendor_adjusted", **index[day]["values"]} for day in sessions]
+    execution_bars = [{"date": day, **raw_index[day]["values"]} for day in sessions]
     split = config["test_start"]
     # Freeze metadata cannot convert a retrospectively chosen holdout into a pristine OOS experiment.
     if config.get("rule_version") != "breakout-v1" or not config.get("selected_at"):
@@ -218,7 +219,15 @@ def backtest(snapshot, config):
     ):
         results[label] = {}
         for horizon in (5, 10, 20):
-            result = short_horizon(bars, sessions, start, end, horizon, **config.get("costs", {}))
+            result = short_horizon(
+                bars,
+                sessions,
+                start,
+                end,
+                horizon,
+                **config.get("costs", {}),
+                execution_bars=execution_bars,
+            )
             returns = [r["net_return"] for r in result["events"]]
             result["return_distribution"] = {
                 f"p{int(p * 100)}": quantile(returns, p) for p in (0.1, 0.25, 0.5, 0.75, 0.9)
@@ -263,6 +272,7 @@ def backtest(snapshot, config):
                 "point_in_time_adjustments_verified": False,
             },
             snapshot["instrument"]["stock_id"],
+            execution_bars=execution_bars,
         )
     return {
         "status": "retrospective_diagnostic",

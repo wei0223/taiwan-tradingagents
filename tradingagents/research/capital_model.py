@@ -5,6 +5,53 @@ from datetime import date, timedelta
 from .scenarios import finite
 
 
+def evaluate_dilution(parent_profit_twd, continuing_profit_twd, basic_shares, components):
+    """If-converted incremental ordering using continuing-operations control EPS.
+
+    The caller must source-review weighted increments and after-tax numerator
+    adjustments; this calculation cannot discover option exercise assumptions.
+    """
+    parent, control, basic = map(finite, (parent_profit_twd, continuing_profit_twd, basic_shares))
+    if basic <= 0 or len({c["id"] for c in components}) != len(components):
+        raise ValueError("Positive basic shares and unique securities required")
+    prepared = []
+    for component in components:
+        if not component.get("source_id") or not component.get("weighting_reviewed"):
+            raise ValueError("Potential shares need reviewed time weighting and source")
+        shares = finite(component["weighted_incremental_shares"])
+        adjustment = finite(component["numerator_adjustment_twd"])
+        if shares <= 0:
+            raise ValueError("Positive incremental shares required")
+        prepared.append((adjustment / shares, component["id"], shares, adjustment))
+    numerator, control_num, denominator = parent, control, basic
+    decisions = []
+    for _, security, shares, adjustment in sorted(prepared):
+        included = (
+            control > 0
+            and (control_num + adjustment) / (denominator + shares) < control_num / denominator
+        )
+        decisions.append(
+            {
+                "id": security,
+                "included": included,
+                "reason": "dilutive_to_continuing_control_eps"
+                if included
+                else "anti_dilutive_excluded",
+            }
+        )
+        if included:
+            numerator += adjustment
+            control_num += adjustment
+            denominator += shares
+    return {
+        "diluted_numerator_twd": numerator,
+        "diluted_weighted_shares": denominator,
+        "eps_twd": numerator / denominator,
+        "component_decisions": decisions,
+        "label": "conditional_reviewed_input_calculation_not_official_eps",
+    }
+
+
 def build(start, end, opening_issued, opening_treasury, events, potential=None):
     start, end = date.fromisoformat(start), date.fromisoformat(end)
     if end < start:

@@ -102,7 +102,15 @@ def retrospective_revenue(rows, folds):
 
 
 def short_horizon(
-    bars, sessions, start, end, horizon=20, fee_bps=14.25, tax_bps=30, slippage_bps=5
+    bars,
+    sessions,
+    start,
+    end,
+    horizon=20,
+    fee_bps=14.25,
+    tax_bps=30,
+    slippage_bps=5,
+    execution_bars=None,
 ):
     if (
         horizon not in [5, 10, 20]
@@ -118,6 +126,11 @@ def short_horizon(
         volume = finite(bar["volume"])
         if not (0 < low <= min(o, c) <= max(o, c) <= h) or volume < 0 or not volume.is_integer():
             raise ValueError("Missing/nontradeable OHLCV cannot enter a return simulation")
+    from .strategy_evaluation import execution_check
+
+    execution = {r["date"]: r for r in (execution_bars or bars)}
+    if len(execution) != len(bars) or sorted(execution) != sessions:
+        raise ValueError("Raw execution calendar must match adjusted diagnostic sessions")
     buy = (fee_bps + slippage_bps) / 10000
     sell = (fee_bps + tax_bps + slippage_bps) / 10000
     if max(buy, sell) >= 1:
@@ -136,6 +149,10 @@ def short_horizon(
         if entry >= len(bars):
             pending.append({"signal_date": sessions[i], "reason": "Next open unavailable"})
             continue
+        entry_check = execution_check(execution[sessions[entry]], "buy")
+        if entry_check["executable"] is False:
+            skipped.append({"signal_date": sessions[i], "reason": entry_check["reason"]})
+            continue
         price = bars[entry]["open"]
         if (
             next_open(plan, price)["status"] != "eligible_for_simulation"
@@ -149,8 +166,19 @@ def short_horizon(
         exit_idx = None
         exit_price = None
         reason = None
-        for j in range(entry, min(terminal + 1, len(bars))):
+        deferred_exit = False
+        for j in range(entry, len(bars)):
             bar = bars[j]
+            exit_check = execution_check(execution[sessions[j]], "sell")
+            if exit_check["executable"] is False:
+                if bar["low"] <= plan["stop_twd"] or j >= terminal:
+                    deferred_exit = True
+                continue
+            if deferred_exit:
+                exit_idx, exit_price, reason = j, bar["open"], "deferred_exit_next_observable_open"
+                break
+            if j > terminal:
+                break
             if bar["open"] <= plan["stop_twd"]:
                 exit_idx, exit_price, reason = j, bar["open"], "gap_through_stop"
                 break
@@ -168,6 +196,15 @@ def short_horizon(
                 exit_idx, exit_price, reason = j, plan["target_twd"], "target_touch"
                 break
         if exit_idx is None:
+            if deferred_exit:
+                pending.append(
+                    {
+                        "signal_date": sessions[i],
+                        "reason": "Unexecutable exit; no later observable fill",
+                    }
+                )
+                next_free = len(bars)
+                continue
             if terminal >= len(bars):
                 pending.append({"signal_date": sessions[i], "reason": "Horizon incomplete"})
                 continue
@@ -178,10 +215,11 @@ def short_horizon(
             )
             continue
         net = exit_price * (1 - sell) / (price * (1 + buy)) - 1
-        marks = [1.0] + [
-            bars[j]["close"] * (1 - sell) / (price * (1 + buy))
-            for j in range(entry, exit_idx)
-        ] + [1 + net]
+        marks = (
+            [1.0]
+            + [bars[j]["close"] * (1 - sell) / (price * (1 + buy)) for j in range(entry, exit_idx)]
+            + [1 + net]
+        )
         peak, drawdown = 1.0, 0.0
         for mark in marks:
             peak = max(peak, mark)
@@ -203,6 +241,12 @@ def short_horizon(
                 "marked_close_max_drawdown": drawdown,
                 "same_entry_horizon_hold_net_return": baseline,
                 "entry_price_capture_is_contemporary_not_historical": True,
+                "execution_verified": False,
+                "entry_execution_check": entry_check,
+                "raw_entry_open": execution[sessions[entry]]["open"],
+                "raw_exit_observation": execution[sessions[exit_idx]][
+                    "open" if "open" in reason or "gap" in reason else "close"
+                ],
             }
         )
         next_free = exit_idx + 1

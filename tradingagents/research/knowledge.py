@@ -99,20 +99,15 @@ def completeness(ctx, documents, inventory, coverage):
             announced.add(event["period"])
         if event.get("material", True) and event.get("document_id") not in eligible:
             missing.append(event["id"])
-    required = {"earnings", "capital", "monthly_revenue", "corrections"}
-    covered = set()
-    for item in coverage:
-        key = item.get("document_id")
-        if (
-            key in eligible
-            and item.get("reviewed")
-            and item.get("category") in required
-            and exact(item["through_at"]) >= exact(ctx["cutoff_at"])
-            and exact(item["from_at"]) <= exact(ctx["cutoff_at"])
-            and exact(item["through_at"]) <= exact(documents[key]["captured_at"])
-        ):
-            covered.add(item["category"])
-    gaps = sorted(required - covered)
+    from .announcement_coverage import reconcile
+
+    index_audit = reconcile(ctx, documents, inventory, coverage, eligible)
+    gaps = sorted(
+        k
+        for k, v in index_audit["categories"].items()
+        if v["state"] not in {"verified_no_updates", "reviewed_events"}
+    )
+    missing = sorted(set(missing + [e["id"] for e in index_audit["unprocessed_events"]]))
     return {
         "status": "complete_within_declared_search" if not missing and not gaps else "incomplete",
         "missing_material_events": missing,
@@ -121,4 +116,8 @@ def completeness(ctx, documents, inventory, coverage):
         "excluded_sources": excluded,
         "announced_earnings_periods": sorted(announced),
         "ex_ante_performance_eligible": False,
+        "official_index_reconciliation": index_audit,
+        "latest_complete_research_allowed": index_audit["latest_complete_research_allowed"]
+        and not missing,
+        "formal_valuation_allowed": index_audit["formal_valuation_allowed"] and not missing,
     }

@@ -14,30 +14,37 @@ def quantile(values, fraction):
     return values[low] + (values[min(low + 1, len(values) - 1)] - values[low]) * (i - low)
 
 
-def valuation(price, reported_rows, cutoff, forward=None, trailing=None, reverse_pe=None):
+def valuation(
+    price,
+    reported_rows,
+    cutoff,
+    forward=None,
+    trailing=None,
+    reverse_pe=None,
+    valuation_config=None,
+    previous_sample=None,
+):
     """Reported PE has an unverified vendor denominator; never relabel it TTM."""
     price = finite(price)
     if price <= 0:
         raise ValueError("Positive unadjusted price required")
-    rows = []
-    seen = set()
-    for row in reported_rows:
-        if row["date"] in seen:
-            raise ValueError("Select one reported PE vintage per day")
-        seen.add(row["date"])
-        if not row.get("source_sha256"):
-            raise ValueError("Reported valuation source required")
-        if max(timestamp(row["date"]), timestamp(row["captured_at"])) <= timestamp(cutoff):
-            value = finite(row["reported_pe"])
-            if value > 0:
-                rows.append((row["date"], value))
-    rows.sort()
+    from .valuation_basis import compare, sample
+
+    receipt = sample(reported_rows, cutoff, valuation_config)
+    rows = [(r["date"], r["pe"]) for r in receipt["rows"]]
     pe_values = [v for _, v in rows]
     result = {
         "price_twd": price,
+        "sample_receipt": receipt,
+        "version_comparison": compare(previous_sample, receipt)
+        if previous_sample
+        else {"status": "no_prior_sample_supplied"},
         "reported_history": {
             "status": "available_descriptive" if rows else "unavailable",
             "count": len(rows),
+            "first_date": receipt["first_date"],
+            "last_date": receipt["last_date"],
+            "sample_sha256": receipt["sample_sha256"],
             "latest": rows[-1][1] if rows else None,
             "median": median(pe_values) if rows else None,
             "p25": quantile(pe_values, 0.25),

@@ -40,8 +40,12 @@ def sections(plan):
                 ),
                 (
                     "重大公告缺件",
-                    "、".join(audit["missing_material_events"])
-                    or "已列入清單者無缺件；不代表全站無遺漏",
+                    (
+                        str(len(audit["missing_material_events"]))
+                        + "筆待核對；逐筆差集見JSON／證據包"
+                    )
+                    if audit["missing_material_events"]
+                    else "已列入清單者無缺件；不代表全站無遺漏",
                 ),
                 ("績效資格", "本次為當下修訂；已公布季度的機械試算不計事前績效"),
             ],
@@ -215,6 +219,152 @@ def sections(plan):
                 ],
             )
         )
+    index = audit.get("official_index_reconciliation", {})
+    state_labels = {
+        "missing_document": "已發現但原件／更正銜接未驗收",
+        "source_uncovered": "來源／窗口未覆蓋",
+        "index_exhaustion_unverified": "官方回應無可核對總筆數，未證明已掃盡",
+        "verified_no_updates": "已驗證指定窗口無更新",
+        "reviewed_events": "窗口內事件均已核對",
+    }
+    names = {
+        "capital": "股本",
+        "earnings": "財報",
+        "monthly_revenue": "月營收",
+        "corrections": "更正",
+    }
+    rows.append(
+        (
+            "公告母集合差集驗收",
+            [
+                (
+                    names.get(k, k),
+                    state_labels.get(v["state"], v["state"])
+                    + f"；索引觀測{v['observed_index_events']}筆，未處理{len(v['missing_event_ids'])}筆",
+                )
+                for k, v in index.get("categories", {}).items()
+            ]
+            + [
+                (
+                    "正式完整研究／估值",
+                    "禁止：來源或模型尚未全通過"
+                    if not plan.get("formal_valuation_allowed")
+                    else "通過所聲明範圍，非投資績效證明",
+                )
+            ],
+        )
+    )
+    disclosure = plan.get("financial_output_disclosure", {})
+    drows = []
+    for item in disclosure.get("rows", []):
+        if item["scenario"] != "base":
+            continue
+        quotient = item["parent_profit_per_current_issued_share_twd"]
+        drows.append(
+            (
+                item["period"],
+                (
+                    f"每股歸母商數 {quotient:.2f}元；非正式稀釋EPS。"
+                    if quotient is not None
+                    else "歸母橋不足，商數不可用。"
+                )
+                + "待補："
+                + "、".join(x["driver"] for x in item["blockers"]),
+            )
+        )
+    if drows:
+        rows.append(
+            (
+                "前瞻輸出分級與股數敏感度",
+                drows
+                + [
+                    (
+                        "分母尺度",
+                        "現股95%／100%／105%僅為假設軸，不是未來股數上下界；各值見完整計算。",
+                    )
+                ],
+            )
+        )
+    illustration = plan.get("illustrative_profit_disclosure", {})
+    irows = []
+    for item in illustration.get("rows", []):
+        if item["scenario"] != "base":
+            continue
+        c = item["calculation"]
+        quotient = item["parent_profit_per_current_issued_share_twd"]
+        irows.append(
+            (
+                item["period"],
+                f"若明示歷史比率持平，歸母 {c['parent_profit_twd'] / 1e8:.2f}億；"
+                + (f"現股商數{quotient:.2f}元" if quotient is not None else "商數分母未核對")
+                + "；非預期值或稀釋EPS",
+            )
+        )
+    total = illustration.get("four_quarter_reference_totals", {}).get("base", {})
+    q = total.get("four_quarter_parent_profit_per_current_issued_share_twd")
+    if q is not None:
+        multiple = total.get("conditional_market_cap_to_parent_profit_multiple")
+        irows.append(
+            (
+                "四季條件尺度",
+                f"四季歸母合計／目前已發行股數 {q:.2f}元"
+                + (
+                    f"；參考股價日期{total['price_reference']['date']}，市值／條件歸母{multiple:.2f}倍"
+                    if multiple is not None
+                    else ""
+                )
+                + "。不是NTM稀釋EPS、Forward PE或合理價。",
+            )
+        )
+    if irows:
+        rows.append(
+            (
+                "歷史比率持平的條件損益",
+                irows + [("用途", "完整損益與來源假設保留；不宣稱產業因果、概率或NTM稀釋EPS。")],
+            )
+        )
+    ranked_rows = []
+    for item in plan.get("illustrative_sensitivity", {}).get("base", []):
+        ranked = item.get("ranking", [])
+        if ranked:
+            ranked_rows.append(
+                (
+                    item["period"],
+                    "；".join(
+                        f"{r['driver']}：歸母端點跨度{r['parent_profit_span_twd'] / 1e8:.2f}億"
+                        for r in ranked[:3]
+                    ),
+                )
+            )
+    if ranked_rows:
+        rows.append(
+            (
+                "條件敏感度順位（非機率）",
+                ranked_rows
+                + [
+                    (
+                        "解讀",
+                        "依明示擾動寬度比較歸母變化，不是獨立變異數貢獻。匯率50%暴露是試算假設，不是已核對避險後暴露。",
+                    )
+                ],
+            )
+        )
+    registry = plan.get("parameter_register", {})
+    rows.append(
+        (
+            "產業參數與敏感度驗收",
+            [
+                (
+                    "參數可用性",
+                    f"待補{registry.get('missing_count', 0)}項；逐項來源、頻率、取得時間、可觀測性與誤差見參數表，未測量的誤差不填零。",
+                ),
+                (
+                    "敏感度意義",
+                    "一次變一項及明示聯合情境；不假設營收、毛利率、匯率等相互獨立。順位取決於指定擾動寬度，不是經驗風險機率。",
+                ),
+            ],
+        )
+    )
     return rows
 
 
@@ -223,7 +373,7 @@ def render(plan, table):
 
     if not plan.get("context"):
         return '<p role="alert">尚未提供研究模式、精確截止與重大公告覆蓋：不得標為即時完整研究或嚴格歷史事前績效。</p>'
-    return "".join(
+    result = "".join(
         "<section><h2>"
         + html.escape(title)
         + "</h2>"
@@ -231,3 +381,45 @@ def render(plan, table):
         + "</section>"
         for title, rows in sections(plan)
     )
+    disclosure = plan.get("illustrative_profit_disclosure", {})
+    detail = []
+
+    def amount(value):
+        return f"{value / 1e8:.2f}億" if value is not None else "不可用"
+
+    for item in disclosure.get("rows", []):
+        c = item["calculation"]
+        tax = item["inputs"]["tax_rate"]["value"] if item.get("inputs") else c.get("tax_rate")
+        quotient = item["parent_profit_per_current_issued_share_twd"]
+        detail.append(
+            [
+                item["scenario"] + " " + item["period"],
+                "／".join(
+                    amount(c.get(k))
+                    for k in ("revenue_twd", "gross_profit_twd", "operating_profit_twd")
+                ),
+                amount(c.get("pretax_profit_twd"))
+                + "／"
+                + (f"{tax * 100:.2f}%" if tax is not None else "未知")
+                + "／"
+                + amount(c.get("parent_profit_twd")),
+                f"{quotient:.3f}元；非稀釋EPS" if quotient is not None else "現股分母未核對",
+                "、".join(x["driver"] for x in item["blockers"]) or "全部為明示條件，非官方實績",
+            ]
+        )
+    if detail:
+        result += (
+            "<section><h2>四季三情境完整條件損益</h2><p>歷史比率持平的可重算例示；不是概率預測。各項來源、數值與假設原文見extension-input.json與計算結果。</p>"
+            + table(
+                [
+                    "情境季度",
+                    "營收／毛利／營益",
+                    "稅前／稅率／歸母",
+                    "每股歸母商數",
+                    "EPS阻塞或資格",
+                ],
+                detail,
+            )
+            + "</section>"
+        )
+    return result

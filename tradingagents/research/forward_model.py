@@ -83,9 +83,17 @@ def partial_case(case, evidence):
             "revenue_twd": revenue,
             "cogs_twd": cogs,
             "gross_profit_twd": gross,
+            "opex_twd": opex,
             "operating_profit_twd": operating,
+            "pretax_profit_twd": pretax,
+            "tax_rate": v.get("tax_rate"),
+            "tax_twd": pretax - net if pretax is not None and net is not None else None,
+            "consolidated_profit_twd": net,
+            "noncontrolling_profit_twd": nci,
             "parent_profit_twd": parent,
-            "diluted_numerator_twd": None,
+            "diluted_numerator_twd": parent + v["diluted_adjustment_twd"]
+            if parent is not None and v.get("diluted_adjustment_twd") is not None
+            else None,
             "diluted_weighted_shares": None,
             "eps_twd": None,
         },

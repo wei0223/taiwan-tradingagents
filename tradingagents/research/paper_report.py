@@ -16,6 +16,7 @@ def render_pdf(directory, font_path):
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
+        CondPageBreak,
         PageBreak,
         Paragraph,
         SimpleDocTemplate,
@@ -30,10 +31,15 @@ def render_pdf(directory, font_path):
     pdfmetrics.registerFont(TTFont("ResearchCJK", str(font_path), subfontIndex=0))
     styles = {
         "body": ParagraphStyle(
-            "body", fontName="ResearchCJK", fontSize=9.2, leading=14, spaceAfter=4, wordWrap="CJK"
+            "body", fontName="ResearchCJK", fontSize=10.5, leading=16, spaceAfter=3, wordWrap="CJK"
         ),
         "small": ParagraphStyle(
-            "small", fontName="ResearchCJK", fontSize=7.6, leading=11, spaceAfter=4, wordWrap="CJK"
+            "small",
+            fontName="ResearchCJK",
+            fontSize=9.2,
+            leading=13.5,
+            spaceAfter=4,
+            wordWrap="CJK",
         ),
         "title": ParagraphStyle(
             "title", fontName="ResearchCJK", fontSize=21, leading=28, spaceAfter=12
@@ -82,8 +88,8 @@ def render_pdf(directory, font_path):
                     ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#c7d5df")),
                     ("LEFTPADDING", (0, 0), (-1, -1), 6),
                     ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
                 ]
             )
         )
@@ -152,7 +158,7 @@ def render_pdf(directory, font_path):
             "small",
         ),
         p(
-            "本版依精確截止時刻核對當前原件；歷史重播及舊資料另標。所有試算均以實際建立時間起算，已公布實績不計預測績效。完整證據包保存數據、模型、Agent原稿與檢查。"
+            "本版重審所列資料截止日的既有證據，不代表產生日期的即時資料。原Agent提交保持原日期，本版新增計算不宣稱已重新辯論。已公布實績不計預測命中。完整原件、模型與辯論另附證據包。"
             if extra.get("research_plan", {}).get("context")
             else "本版為既有資料的模型與論述升級，非即時更新或事前預測。完整證據包含所有引用資料、計算、獨立Agent原稿與檢查；PDF不是完整重現資料的替代品。",
             "small",
@@ -237,11 +243,30 @@ def render_pdf(directory, font_path):
             ),
             p("倍數軸來自來源報列歷史分位數，只作敏感度。不是已觀測市場共識或合理價。", "small"),
         ]
+    pe_story = []
+    receipt = extra["valuation"].get("sample_receipt", {})
+    version = extra["valuation"].get("version_comparison", {})
+    if receipt:
+        pe_story += [
+            p("PE口徑與版本稽核", "h3"),
+            p(
+                f"固定樣本{receipt['first_date']}至{receipt['last_date']}，有效{receipt['count']}筆。分母及價格追溯調整仍未核對，只作來源報列PE描述；不當作已驗證TTM或Forward PE。",
+                "small",
+            ),
+        ]
+        change = version.get("attribution")
+        if change:
+            pe_story += [
+                p(
+                    f"相對前版中位數改變{change['total_change']:.3f}倍：刪除日期{change['removed_dates_effect']:.3f}、共同日期修訂{change['common_date_revision_effect']:.3f}、新增日期{change['added_dates_effect']:.3f}。這是固定順序的數學分解，非經濟因果。",
+                    "small",
+                )
+            ]
     from .plan_view import sections as plan_sections
 
     plan_rows = plan_sections(extra.get("research_plan", {}))
     if plan_rows:
-        story += [PageBreak(), p("時間、股本與未來四季驗收", "h2")]
+        story += [PageBreak(), p("時間、股本與未來四季驗收", "h2"), *pe_story]
         for heading, rows in plan_rows:
             if heading == "最新行情另列核對":
                 rows = rows[:1]
@@ -300,7 +325,7 @@ def render_pdf(directory, font_path):
                     p(heading, "h3"),
                     table(["檢查", "結果及限制"], rows, [43 * mm, 131 * mm]),
                 ]
-    story += [PageBreak(), p("基本面分析師｜從營運到每股獲利", "h2")]
+    story += [CondPageBreak(65 * mm), p("基本面分析師｜從營運到每股獲利", "h2")]
     n = notes["fundamental"]
     for field, heading in (
         ("primary_claim", "主張"),
@@ -309,6 +334,8 @@ def render_pdf(directory, font_path):
     ):
         story += [p(heading + "：" + n.get(field, n["position"]))]
     for para in n["paragraphs"]:
+        if para.startswith(("未來四季逐季列", "獨立多空先", "多空若主張", "新增「歷史比率持平」")):
+            continue
         story.append(p(para))
     if q3:
         story += [
@@ -393,7 +420,7 @@ def render_pdf(directory, font_path):
         p("改判條件：" + "；".join(n["conditions"])),
         p(n.get("confidence", "未校準質性信心，無統計區間。"), "small"),
     ]
-    story += [PageBreak(), p("技術面與籌碼面｜獨立交易尺度", "h2")]
+    story += [CondPageBreak(65 * mm), p("技術面與籌碼面｜獨立交易尺度", "h2")]
     prices = snap.get("extensions", {}).get("TaiwanStockPriceAdj", {}).get("records", [])[-90:]
     story += [
         chart(
@@ -405,12 +432,13 @@ def render_pdf(directory, font_path):
     ]
     for role, label in (("technical", "技術面分析師"), ("institutional", "籌碼面分析師")):
         n = notes[role]
-        story += [
-            p(label, "h3"),
-            p(n["position"]),
-            p("量化證據：" + n.get("quantified_evidence", "見完整計算")),
-        ]
-        story += [p(para) for para in n["paragraphs"]]
+        story += [p(label, "h3"), p(n["position"])]
+        if role == "institutional":
+            story.append(p("量化證據：" + n.get("quantified_evidence", "見完整計算")))
+        for i, para in enumerate(n["paragraphs"]):
+            if role == "institutional" and i == 0 and "此為" in para:
+                para = "此為" + para.split("此為", 1)[1]
+            story.append(p(para))
         story += [
             p("最強反證：" + n.get("strongest_counterevidence", n["disagreement"])),
             p("改判條件：" + "；".join(n["conditions"])),
@@ -459,14 +487,18 @@ def render_pdf(directory, font_path):
                     ["期限", "訊號日", "單筆成本後報酬"], individual, [35 * mm, 75 * mm, 64 * mm]
                 ),
             ]
-    story += [Spacer(1, 5 * mm), p("交叉質詢與證據稽核", "h2")]
+    story += [
+        Spacer(1, 5 * mm),
+        p("交叉質詢摘要與證據稽核", "h2"),
+        p("正文保留每方一項關鍵反駁；完整逐項回覆與原始提交位元組見證據包及HTML附錄。", "small"),
+    ]
     if debate["independent_agents_executed"]:
         for role, label in (("bull", "多方"), ("bear", "空方")):
             reply = debate["replies"][role]
             story += [
                 p(label + "：" + reply["position_before"] + " → " + reply["position_after"], "h3")
             ]
-            for r in reply["changes"]:
+            for r in reply["changes"][:1]:
                 story += [p(r["claim_id"] + "／" + r["assessment"] + "：" + r["reason"], "small")]
         risk = debate["risk"]
         story += [p("獨立風險審查", "h3")]
@@ -494,7 +526,7 @@ def render_pdf(directory, font_path):
     story += [
         p("證據入口與重現", "h3"),
         p(
-            "F01/F02原始財報與逐筆頁碼見 documents/、review-input.json；M01行情與法人原始值見 snapshot.json、bundle.json；T01規則與條件見 review.json。extension-input.json保存假設，extension.json保存計算及5/10/20日診斷。debate-input.json和agents/保留真實開場、反駁、風險與裁決。全部檔案由delivery-manifest.json逐一SHA256校驗。",
+            "完整證據包收錄原件、行情與法人資料、全部假設與計算、原Agent提交及SHA256清單。解開ZIP後開啟report.html核對引用；只取得PDF仍無法重現全部研究。",
             "small",
         ),
     ]
@@ -502,17 +534,19 @@ def render_pdf(directory, font_path):
     cited |= {key for key in citation_urls if "F03" in key}
     story.append(
         p(
-            "正文引用可點開官方來源；完整原件、公布／捕獲時刻、SHA256與版本清單見證據包的source-ledger.json。以下保留主要財報與股本原件識別。",
+            "引用可點開官方來源；完整時點、版本與SHA256在證據包。下列僅列主要原件雜湊前綴。",
             "small",
         )
     )
     for key, doc in read("review-input.json").get("documents", {}).items():
         if key not in cited:
             continue
-        story.append(p("[" + key + "] SHA256 " + doc["sha256"], "small"))
+        story.append(
+            p("[" + key + "] SHA256前16碼 " + doc["sha256"][:16] + "；完整雜湊見證據包", "small")
+        )
     story += [
         p(
-            "原封存預測及發布時間不變；本次所有新試算以實際產生時間起算，不能回填成歷史事前預測。請連同完整證據包保存，單獨PDF不能重現全部資料。",
+            "原封存預測及發布時間不變；新試算另存，不能回填事前績效。完整重現須保存證據包。",
             "small",
         )
     ]
@@ -539,8 +573,8 @@ def render_pdf(directory, font_path):
         pagesize=A4,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
-        topMargin=16 * mm,
-        bottomMargin=20 * mm,
+        topMargin=14 * mm,
+        bottomMargin=16 * mm,
         title=stock + " 研究模型與證據報告",
     ).build(story, onFirstPage=footer, onLaterPages=footer)
     return target

@@ -175,10 +175,17 @@ def render(extra, debate, snapshot, table):
             [
                 ["來源報列 PE 觀測數", hist["count"]],
                 ["來源報列 PE 中位數", hist["median"]],
+                ["固定樣本期間", str(hist.get("first_date")) + " 至 " + str(hist.get("last_date"))],
+                ["樣本指紋", hist.get("sample_sha256", "舊版未保存")],
                 ["未來十二月 PE", val["forward"]["status"]],
                 ["已驗證 TTM PE", val["trailing"]["status"]],
             ],
         )
+        version = val.get("version_comparison", {})
+        if version.get("attribution"):
+            appendix += "<h3>PE跨版本差異歸因</h3>" + table(
+                ["項目", "結果"], [[k, str(v)] for k, v in version["attribution"].items()]
+            )
         appendix += table(
             ["假設 PE", "現價倒推所需 EPS", "相對可驗證基準的成長"],
             [
@@ -206,8 +213,12 @@ def render(extra, debate, snapshot, table):
                 [
                     split + "/" + horizon,
                     r["count"],
-                    f"{r['net_win_rate'] * 100:.1f}%" if r.get("net_win_rate") is not None else "樣本不足，僅列單筆",
-                    f"{r['return_distribution']['p50'] * 100:.2f}%" if r['return_distribution']['p50'] is not None else "樣本不足",
+                    f"{r['net_win_rate'] * 100:.1f}%"
+                    if r.get("net_win_rate") is not None
+                    else "樣本不足，僅列單筆",
+                    f"{r['return_distribution']['p50'] * 100:.2f}%"
+                    if r["return_distribution"]["p50"] is not None
+                    else "樣本不足",
                     f"{r['worst_trade_marked_close_drawdown'] * 100:.2f}%"
                     if r["count"]
                     else "不可用",
@@ -219,8 +230,17 @@ def render(extra, debate, snapshot, table):
         for split, rows in replay["splits"].items():
             for horizon, r in rows.items():
                 if r.get("aggregate_statistics_suppressed") and r["events"]:
-                    appendix += table(["區間／期限", "訊號日／進場日", "單筆成本後報酬"],
-                        [[split + "/" + horizon, e["signal_date"] + " / " + e["entry_date"], f"{e['net_return']*100:.2f}%"] for e in r["events"]])
+                    appendix += table(
+                        ["區間／期限", "訊號日／進場日", "單筆成本後報酬"],
+                        [
+                            [
+                                split + "/" + horizon,
+                                e["signal_date"] + " / " + e["entry_date"],
+                                f"{e['net_return'] * 100:.2f}%",
+                            ]
+                            for e in r["events"]
+                        ],
+                    )
     appendix += table(
         ["視窗／法人", "淨額／窗口成交量", "淨額／可核對流通股數"],
         [
