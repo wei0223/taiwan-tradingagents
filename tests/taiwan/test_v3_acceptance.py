@@ -119,8 +119,11 @@ class AnnouncementTests(unittest.TestCase):
         self.assertEqual(r["mother_set_count"], 0)
 
     def test_unknown_exhaustion_and_correction_link_remain_distinct(self):
-        row = event(subject="更正月營收")
-        doc = {"source_url": row["HYPERLINK"], "sha256": "a", "revision_id": "revision-2"}
+        from tests.taiwan.test_originals import original, row as original_row
+
+        row = original_row("M99", "更正月營收")
+        doc = original("本資料由奇鋐公司提供 主旨：更正月營收", row)
+        doc["revision_id"] = "revision-2"
         r = coverage.reconcile(
             CTX,
             {"index": index_doc([row], 1), "original": doc},

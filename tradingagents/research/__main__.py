@@ -17,6 +17,13 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    capture_originals = commands.add_parser("capture-originals", help="Opt-in bounded public original capture from a saved official index")
+    capture_originals.add_argument("--index", type=Path, required=True)
+    capture_originals.add_argument("--output-dir", type=Path, required=True)
+    capture_originals.add_argument("--max-documents", type=int, default=50)
+    announcement_audit = commands.add_parser("audit-announcements", help="Offline original-content and coverage audit; never modify forecasts")
+    announcement_audit.add_argument("--input", type=Path, required=True)
+    announcement_audit.add_argument("--output-dir", type=Path, required=True)
     prepare = commands.add_parser("prepare", help="Fetch once and create evidence-only run folders")
     prepare.add_argument("--symbols", default=os.getenv("RESEARCH_SYMBOLS", "2330,3017,3231"))
     prepare.add_argument("--start", default=os.getenv("RESEARCH_START"), required=not os.getenv("RESEARCH_START"))
@@ -109,6 +116,13 @@ def main(argv=None, provider=None, material_client=None):
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command in {"capture-originals", "audit-announcements"}:
+            from .announcement_audit import audit as audit_announcements, capture
+
+            result = (capture(load_json(args.index), args.output_dir, args.max_documents)
+                      if args.command == "capture-originals" else audit_announcements(load_json(args.input), args.output_dir))
+            print(json.dumps({"status": result.get("status", "captured"), "forecast_modified": False}))
+            return 0
         if args.command == "score-parameter":
             from .parameter_tracking import score
 

@@ -10,6 +10,7 @@ import json
 from datetime import timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from tradingagents.dataflows.taiwan.originals import review_original
 from tradingagents.dataflows.taiwan.publications import MopsAnnouncementClient
 
 from .scenarios import timestamp
@@ -137,22 +138,37 @@ def reconcile(ctx, documents, inventory, coverage, eligible):
     for item in inventory:
         link = item.get("original_url")
         if link:
-            inventory_by_url[canonical(link)] = item
+            inventory_by_url.setdefault(canonical(link), []).append(item)
     for event in events.values():
         if not event["categories"]:
             continue
         link = canonical(event["row"].get("HYPERLINK"))
-        entry = inventory_by_url.get(link, {})
+        candidates = inventory_by_url.get(link, [])
+        exact = [x for x in candidates if x.get("id") == event["id"]]
+        # Shared year-list URLs do not identify an individual upload. Never let
+        # insertion order silently choose a different document for an event.
+        choices = exact or candidates
+        entry = choices[0] if len({x.get("document_id") for x in choices}) == 1 else {}
         doc_id = entry.get("document_id")
         doc = documents.get(doc_id, {})
         # URL match to the original is required, not just an inventory checkbox.
         valid = doc_id in eligible and canonical(doc.get("source_url")) == link
+        content = {"status": "missing_document", "content_verified": False}
+        if valid:
+            try:
+                content = review_original(event["row"], doc)
+            except (ValueError, KeyError, TypeError):
+                content = {"status": "original_content_unverified", "content_verified": False}
+            valid = content["content_verified"]
         item = {k: v for k, v in event.items() if k != "row"}
         item.update(
             subject=event["row"].get("SUBJECT"),
             original_url=link,
             document_id=doc_id,
-            status="reviewed_original" if valid else "missing_document",
+            status="content_verified_original" if valid else content["status"],
+            original_content_review=content,
+            numeric_impact_reviewed=False,
+            first_publication_vintage_proven=False,
         )
         if valid:
             item.update(
@@ -228,6 +244,15 @@ def reconcile(ctx, documents, inventory, coverage, eligible):
         "mother_set_count": len(events),
         "unprocessed_events": unresolved,
         "matched_events": matched,
+        "outside_declared_categories": [
+            {
+                **{k: v for k, v in event.items() if k != "row"},
+                "subject": event["row"].get("SUBJECT"),
+                "reason": "outside_declared_category_rules_not_content_reviewed",
+            }
+            for event in events.values()
+            if not event["categories"]
+        ],
         "revision_links": revisions,
         "issues": issues,
         "source_coverage_verified": passed,

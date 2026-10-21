@@ -569,6 +569,11 @@ sensitivities, dilution arithmetic and raw-price execution checks do not establi
 calibrated predictions or trading alpha. See the [v3 acceptance contracts](docs/taiwan/v3-acceptance.md)
 for blocked-source states, reproducibility, parameters and clustered evaluation.
 
+Opt-in `capture-originals` archives bounded public MOPS responses; offline
+`audit-announcements` applies the same issuer, period, content and byte checks as
+daily research. Annual filing lists, blank HTTP-200 pages and missing server-total
+evidence remain pending. See [announcement original acceptance](docs/taiwan/announcement-originals.md).
+
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citation
