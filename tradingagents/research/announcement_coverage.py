@@ -170,6 +170,33 @@ def reconcile(ctx, documents, inventory, coverage, eligible):
             numeric_impact_reviewed=False,
             first_publication_vintage_proven=False,
         )
+        if content["status"] == "listing_only" and entry.get("filing_documents"):
+            from tradingagents.dataflows.taiwan.filing_links import candidates, verify_chain
+
+            chains, excluded_chains = [], []
+            for document in entry["filing_documents"]:
+                try:
+                    proof = verify_chain(event["row"], doc, document)
+                    if timestamp(proof["known_since_capture"]) > cutoff:
+                        excluded_chains.append(
+                            {"filename": document["filename"], "reason": "captured_after_cutoff"}
+                        )
+                    else:
+                        chains.append(proof)
+                except (ValueError, KeyError, TypeError):
+                    excluded_chains.append(
+                        {
+                            "filename": document.get("filename"),
+                            "reason": "unverified_document_chain",
+                        }
+                    )
+            expected = {d["filename"] for d in candidates(event["row"], doc)}
+            item["current_period_document_chains"] = chains
+            item["excluded_filing_chains"] = excluded_chains
+            item["current_period_document_set_captured"] = bool(expected) and expected == {
+                d["filename"] for d in chains
+            }
+            item["event_version_link_verified"] = False
         if valid:
             item.update(
                 original_sha256=doc["sha256"],
@@ -236,6 +263,9 @@ def reconcile(ctx, documents, inventory, coverage, eligible):
     passed = not any("unclassified_material" in e["categories"] for e in unresolved) and all(
         v["state"] in {"verified_no_updates", "reviewed_events"} for v in categories.values()
     )
+    # TWSE describes ezSearch as selected disclosure items. Exhausting a search
+    # response, even with a bound total, cannot prove every MOPS source family.
+    all_mops_announcements_proven = False
     return {
         "status": "passed_within_declared_window" if passed else "blocked",
         "data_as_of": ctx["cutoff_at"],
@@ -256,7 +286,14 @@ def reconcile(ctx, documents, inventory, coverage, eligible):
         "revision_links": revisions,
         "issues": issues,
         "source_coverage_verified": passed,
-        "latest_complete_research_allowed": passed and ctx["mode"] == "latest_research",
-        "formal_valuation_allowed": passed and ctx["mode"] != "retrospective_diagnostic",
-        "limitation": "Search response without bound server exhaustion evidence cannot certify source completeness; current capture is not an initial historical vintage",
+        "source_coverage_scope": "selected_ezsearch_items_within_declared_query_only",
+        "all_mops_announcements_proven": all_mops_announcements_proven,
+        "source_scope_reference": "https://www.twse.com.tw/zh/about/company/guide.html",
+        "latest_complete_research_allowed": passed
+        and all_mops_announcements_proven
+        and ctx["mode"] == "latest_research",
+        "formal_valuation_allowed": passed
+        and all_mops_announcements_proven
+        and ctx["mode"] != "retrospective_diagnostic",
+        "limitation": "Selected ezSearch items are not the complete MOPS disclosure universe; bound totals certify only selected return-set exhaustion. Current capture is not an initial historical vintage",
     }

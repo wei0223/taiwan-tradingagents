@@ -574,6 +574,10 @@ Opt-in `capture-originals` archives bounded public MOPS responses; offline
 daily research. Annual filing lists, blank HTTP-200 pages and missing server-total
 evidence remain pending. See [announcement original acceptance](docs/taiwan/announcement-originals.md).
 
+`audit-filing-links` verifies listing/form/PDF chains while keeping historical
+event-version identity separate. ezSearch is a selected disclosure index; even a
+bound row total cannot certify the whole MOPS universe. See [filing version and source scope](docs/taiwan/filing-version-links.md).
+
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citation

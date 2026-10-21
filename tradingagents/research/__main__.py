@@ -17,6 +17,9 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    filing_links = commands.add_parser("audit-filing-links", help="Offline listing/form/PDF chain audit; preserve historical event ambiguity")
+    filing_links.add_argument("--input", type=Path, required=True)
+    filing_links.add_argument("--output-dir", type=Path, required=True)
     capture_originals = commands.add_parser("capture-originals", help="Opt-in bounded public original capture from a saved official index")
     capture_originals.add_argument("--index", type=Path, required=True)
     capture_originals.add_argument("--output-dir", type=Path, required=True)
@@ -116,6 +119,12 @@ def main(argv=None, provider=None, material_client=None):
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "audit-filing-links":
+            from .filing_link_audit import audit as audit_filing_links
+
+            result = audit_filing_links(load_json(args.input), args.output_dir)
+            print(json.dumps({"documents": result["unique_current_documents"], "verified_event_version_links": result["verified_event_version_links"]}))
+            return 0
         if args.command in {"capture-originals", "audit-announcements"}:
             from .announcement_audit import audit as audit_announcements, capture
 
