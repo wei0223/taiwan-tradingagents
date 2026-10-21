@@ -17,7 +17,10 @@ def accept(snapshot, output_dir, review_input=None):
     """Exercise the daily report path without manufacturing EPS assumptions or PIT history."""
     output = Path(output_dir)
     health = audit_snapshots([snapshot])
-    report = package(snapshot, output, review_input=review_input)
+    from .daily_plan import prepare
+
+    review_input, extension = prepare(snapshot, review_input)
+    report = package(snapshot, output, review_input=review_input, extension_input=extension)
     calendar = snapshot.get("market_calendar", {})
     sessions = verify_calendar(calendar, snapshot["instrument"]["exchange"])
     queries = []
@@ -56,6 +59,8 @@ def accept(snapshot, output_dir, review_input=None):
         "review_axes": {k: v["status"] for k, v in report["review"]["axes"].items()},
         "review_sha256": report["review"]["review_sha256"],
         "review_gate": "passed; unavailable axes explicitly retained, not investment accuracy",
+        "research_completeness": report["extension"]["research_plan"].get("completeness", {"status": "unavailable_explicit_plan_required"}),
+        "research_ready": False,
         "limitations": [
             "Operational acceptance is not forecast accuracy or profitable strategy validation",
             "Current captures cannot stand in for original historical numeric versions",

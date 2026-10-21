@@ -35,7 +35,7 @@ def _period(packet, basis):
     return start, end
 
 
-def _packet(packet, stock, documents, cutoff, fields=()):
+def _packet(packet, stock, documents, cutoff, fields=(), allowed_scopes=("consolidated",)):
     if not packet:
         raise Unavailable("reviewed_packet_missing")
     if packet.get("stock_id") != stock:
@@ -44,7 +44,7 @@ def _packet(packet, stock, documents, cutoff, fields=()):
         raise Unavailable("numeric_transcription_not_reviewed")
     if not packet.get("locator") or not packet.get("version_set"):
         raise Unavailable("page_locator_and_selected_version_required")
-    if packet.get("unit") != "TWD_and_shares" or packet.get("scope") != "consolidated":
+    if packet.get("unit") != "TWD_and_shares" or packet.get("scope") not in allowed_scopes:
         raise Unavailable("normalized_TWD_shares_and_consolidated_scope_required")
     refs = packet.get("document_ids", [])
     if not refs or len(refs) != len(set(refs)):
