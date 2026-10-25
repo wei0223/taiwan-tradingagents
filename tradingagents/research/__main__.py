@@ -17,6 +17,9 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    refresh_market = commands.add_parser("refresh-market", help="Bounded public TWSE raw prices/institutions supplement; adjusted prices remain separately gated")
+    refresh_market.add_argument("--snapshot", type=Path, required=True)
+    refresh_market.add_argument("--output-dir", type=Path, required=True)
     registry = commands.add_parser("refresh-sources", help="Capture official source families into a persistent local version ledger; no secrets")
     registry.add_argument("--plan", type=Path, required=True)
     registry.add_argument("--archive-dir", type=Path, required=True)
@@ -126,6 +129,20 @@ def main(argv=None, provider=None, material_client=None):
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "refresh-market":
+            from tradingagents.dataflows.taiwan.current_market import CurrentMarketProvider
+
+            if args.output_dir.exists():
+                raise ValueError("Use a new capture directory")
+            args.output_dir.mkdir(parents=True)
+            client = CurrentMarketProvider()
+            try:
+                refreshed = client.refresh(load_json(args.snapshot))
+                write_json(args.output_dir / "snapshot.json", refreshed)
+            finally:
+                write_json(args.output_dir / "capture-receipts.json", client.receipts)
+            print(json.dumps({"status": "raw_and_institutions_refreshed", "adjusted_prices_modified": False}))
+            return 0
         if args.command == "refresh-sources":
             from .source_registry import refresh
 
