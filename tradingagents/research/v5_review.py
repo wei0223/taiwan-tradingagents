@@ -148,8 +148,8 @@ def build(snapshot, result, extension, documents):
     parameters = parameter_dimensions(forward, result["publishing_quality"]["forward_parameter_register"], documents, cutoff)
     events = inventory(plan, documents, spec)
     registry = result.get("official_source_registry", {})
-    for family, payload in registry.get("families", {}).items():
-        for key in payload.get("pending_keys", []):
+    for family, payload in sorted(registry.get("families", {}).items()):
+        for key in sorted(payload.get("pending_keys", [])):
             events["events"].append({"source_id": "registry:" + key, "published_at": None,
                 "categories": [family], "status": "SOURCE_UNAVAILABLE", "material": True,
                 "reason": "required_family_item_publication_or_selected_original_not_verified",
@@ -160,7 +160,9 @@ def build(snapshot, result, extension, documents):
             "reason": "historical_event_to_filename_version_binding_pending",
             "model_impact": "strict_historical_backtest_blocked_not_new_current_event",
             "hard_block": False, "historical_backtest_block": True})
+    events["events"].sort(key=lambda r: r["source_id"])
     events["hard_blockers"] = [r["source_id"] for r in events["events"] if r["hard_block"]]
+    events["complete_current_research_allowed"] = events["complete_current_research_allowed"] and not events["hard_blockers"]
     previous = extension.get("revision_comparison", {}).get("previous_forward")
     revision = compare(previous, forward) if previous else {"status": "no_prior_model_supplied", "rows": []}
     anchor = extension.get("financial_packets", {}).get("anchor", {}).get("values", {})

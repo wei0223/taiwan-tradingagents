@@ -241,6 +241,16 @@ class EvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             revenue_diagnostic({'instrument':{'stock_id':'3231'},'as_of':'2026-10-20'},'3017',CUTOFF)
 
+    def test_registry_disclosure_reproduces_after_json_round_trip(self):
+        from tradingagents.research.v5_review import build
+        snapshot={'instrument':{'stock_id':'3017'},'datasets':{'TaiwanStockPrice':{'records':[]}}}
+        plan={'context':{'cutoff_at':CUTOFF},'forward':{},'revenue_projection':{'status':'unavailable'}}
+        result={'extension':{'research_plan':plan},'publishing_quality':{'forward_parameter_register':[]},
+                'official_source_registry':{'families':{'z':{'pending_keys':['z2','z1']},'a':{'pending_keys':['a1']}}}}
+        a=build(snapshot,result,{}, {})
+        b=build(snapshot,json.loads(json.dumps(result,sort_keys=True)),{}, {})
+        self.assertEqual(fingerprint(a),fingerprint(b))
+
     def test_unbound_scoring_provenance_rejected(self):
         with self.assertRaises(ValueError):
             error_summary([{'status': 'scored_selected_initial_actual', 'error': 1}])

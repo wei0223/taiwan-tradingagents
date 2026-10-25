@@ -1,6 +1,6 @@
 # V5 cross-company acceptance, 2026-10-26
 
-375 offline Taiwan tests and full-repository Ruff passed. Reports use the earlier
+376 offline Taiwan tests and full-repository Ruff passed. Reports use the earlier
 reviewed 2026-10-26 knowledge boundaries and market data through 2026-10-22. This
 task changes evidence/model-validation presentation, not numerical forecasts.
 
