@@ -14,9 +14,24 @@ from .bundle import build_bundle, check_dates, fingerprint, reject_secret
 from .debate import STAGES, load_json, load_run, register_agent, start_run, stop, submit, write_json
 
 
-def main(argv=None, provider=None):
+def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    registry = commands.add_parser("refresh-sources", help="Capture official source families into a persistent local version ledger; no secrets")
+    registry.add_argument("--plan", type=Path, required=True)
+    registry.add_argument("--archive-dir", type=Path, required=True)
+    registry.add_argument("--output-dir", type=Path, required=True)
+    registry.add_argument("--review-input-dir", type=Path)
+    filing_links = commands.add_parser("audit-filing-links", help="Offline listing/form/PDF chain audit; preserve historical event ambiguity")
+    filing_links.add_argument("--input", type=Path, required=True)
+    filing_links.add_argument("--output-dir", type=Path, required=True)
+    capture_originals = commands.add_parser("capture-originals", help="Opt-in bounded public original capture from a saved official index")
+    capture_originals.add_argument("--index", type=Path, required=True)
+    capture_originals.add_argument("--output-dir", type=Path, required=True)
+    capture_originals.add_argument("--max-documents", type=int, default=50)
+    announcement_audit = commands.add_parser("audit-announcements", help="Offline original-content and coverage audit; never modify forecasts")
+    announcement_audit.add_argument("--input", type=Path, required=True)
+    announcement_audit.add_argument("--output-dir", type=Path, required=True)
     prepare = commands.add_parser("prepare", help="Fetch once and create evidence-only run folders")
     prepare.add_argument("--symbols", default=os.getenv("RESEARCH_SYMBOLS", "2330,3017,3231"))
     prepare.add_argument("--start", default=os.getenv("RESEARCH_START"), required=not os.getenv("RESEARCH_START"))
@@ -27,6 +42,7 @@ def main(argv=None, provider=None):
                          help="Archive MOPS dates; numeric vintages usable only from capture date")
     prepare.add_argument("--extended", action="store_true", help="Add valuation, statements, adjusted prices, news/social and official sessions")
     prepare.add_argument("--news-days", type=int, default=3)
+    prepare.add_argument("--material-events", action="store_true", help="Capture recent all-category official announcements; originals still require review")
     prepare.add_argument("--archive-dir", type=Path, help="Persist immutable captured versions")
     imported = commands.add_parser("from-snapshot", help="Create a run from an already saved snapshot")
     imported.add_argument("--snapshot", type=Path, required=True)
@@ -82,6 +98,12 @@ def main(argv=None, provider=None):
     upgrade.add_argument("--review-input", type=Path, help="Named-reviewer source packets; never infer missing statement semantics")
     upgrade.add_argument("--release", type=Path, help="Original sealed release; preserve issue time and predictions")
     upgrade.add_argument("--actuals", type=Path, help="Explicit selected actual revision list; requires --release")
+    upgrade.add_argument("--extension-input", type=Path, help="Company-specific source-reviewed drivers, cash detail, valuation and frozen replay configuration")
+    upgrade.add_argument("--research-plan", type=Path, help="Exact mode/cutoff, material announcement coverage, capital and four-quarter models")
+    upgrade.add_argument("--debate-input", type=Path, help="Actual independent openings, rebuttals, risk and evidence-led rulings")
+    upgrade.add_argument("--pdf-font", type=Path, help="Optional PDF edition: installed CJK TrueType font; requires reportlab")
+    upgrade.add_argument("--official-source-store", type=Path)
+    upgrade.add_argument("--official-source-snapshot")
     validation = commands.add_parser("validate-forecasts", help="Score sealed forecasts only after actual publication")
     validation.add_argument("--input", type=Path, required=True)
     validation.add_argument("--output", type=Path, required=True)
@@ -97,8 +119,45 @@ def main(argv=None, provider=None):
     tracking.add_argument("--release", type=Path, required=True)
     tracking.add_argument("--actuals", type=Path)
     tracking.add_argument("--output-dir", type=Path, required=True)
+    parameter = commands.add_parser("score-parameter", help="Append a versioned operating-parameter forecast comparison")
+    parameter.add_argument("--release", type=Path, required=True)
+    parameter.add_argument("--actual", type=Path, required=True)
+    parameter.add_argument("--evaluated-at", required=True)
+    parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "refresh-sources":
+            from .source_registry import refresh
+
+            plan = load_json(args.plan)
+            reviews = ({c["stock_id"]: load_json(args.review_input_dir / (c["stock_id"] + ".json")) for c in plan["companies"]}
+                       if args.review_input_dir else None)
+            result = refresh(plan, args.archive_dir, args.output_dir, reviews=reviews)
+            print(json.dumps({"companies": list(result["companies"]), "requests": result["request_count"], "pdfs": result["pdf_count"]}))
+            return 0
+        if args.command == "audit-filing-links":
+            from .filing_link_audit import audit as audit_filing_links
+
+            result = audit_filing_links(load_json(args.input), args.output_dir)
+            print(json.dumps({"documents": result["unique_current_documents"], "verified_event_version_links": result["verified_event_version_links"]}))
+            return 0
+        if args.command in {"capture-originals", "audit-announcements"}:
+            from .announcement_audit import audit as audit_announcements, capture
+
+            result = (capture(load_json(args.index), args.output_dir, args.max_documents)
+                      if args.command == "capture-originals" else audit_announcements(load_json(args.input), args.output_dir))
+            print(json.dumps({"status": result.get("status", "captured"), "forecast_modified": False}))
+            return 0
+        if args.command == "score-parameter":
+            from .parameter_tracking import score
+
+            if args.output.exists() or args.output.resolve() in {args.release.resolve(), args.actual.resolve()}:
+                raise ValueError("Use a new parameter evaluation output; originals cannot be overwritten")
+            result = score(load_json(args.release), load_json(args.actual), args.evaluated_at)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            write_json(args.output, result)
+            print(json.dumps({"status": result["status"]}))
+            return 0
         if args.command == "track-release":
             from .tracking import read_tracking, track
 
@@ -128,12 +187,22 @@ def main(argv=None, provider=None):
         if args.command == "upgrade":
             from .reporting import package
 
-            result = package(load_json(args.snapshot), args.output_dir,
+            snapshot = load_json(args.snapshot)
+            extension = load_json(args.extension_input) if args.extension_input else None
+            if args.research_plan:
+                extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
+                if extension.get("research_plan"):
+                    raise ValueError("Supply one research plan only")
+                extension["research_plan"] = load_json(args.research_plan)
+            result = package(snapshot, args.output_dir,
                              load_json(args.model) if args.model else None,
                              load_json(args.industry) if args.industry else None,
                              load_json(args.analysts) if args.analysts else None,
                              load_json(args.review_input) if args.review_input else None,
-                             args.release, load_json(args.actuals) if args.actuals else None)
+                             args.release, load_json(args.actuals) if args.actuals else None,
+                             extension,
+                             load_json(args.debate_input) if args.debate_input else None, args.pdf_font,
+                             args.official_source_store, args.official_source_snapshot)
             print(json.dumps({"stock_id": result["stock_id"], "decision": result["decision"]["state"],
                               "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"],
                               "review_axes": {k: v["status"] for k, v in result["review"]["axes"].items()}}))
@@ -165,6 +234,19 @@ def main(argv=None, provider=None):
             for symbol in symbols:
                 try:
                     snapshot = provider.snapshot(symbol, args.start, args.as_of)
+                    if args.material_events:
+                        from datetime import date, timedelta
+
+                        from tradingagents.dataflows.taiwan.material_events import (
+                            MaterialEventClient,
+                        )
+
+                        client = material_client or MaterialEventClient()
+                        beginning = max(args.start, (date.fromisoformat(args.as_of)-timedelta(days=90)).isoformat())
+                        try:
+                            snapshot["material_event_audit"] = client.query(snapshot["instrument"]["stock_id"], beginning, args.as_of)
+                        except VendorError as exc:
+                            snapshot["material_event_audit"] = {**getattr(exc, "failure_receipt", {}), "status": "unavailable", "rows": []}
                     reject_secret(snapshot, token)
                     bundle = build_bundle(snapshot)
                     if args.archive_dir:

@@ -10,6 +10,7 @@ from tradingagents.dataflows.taiwan.publications import TAIPEI
 
 ROLES = ("fundamental", "technical", "institutional")
 FIELDS = ("position", "stronger_case", "disagreement", "evidence_change", "conditions")
+RESEARCH_FIELDS = ("primary_claim", "quantified_evidence", "strongest_counterevidence", "confidence")
 ROLE_LABELS = {
     "fundamental": "基本面分析師",
     "technical": "技術面分析師",
@@ -35,9 +36,10 @@ def normalize_notes(prose, stock, as_of):
             value = {"paragraphs": value}
         if not isinstance(value, dict):
             raise ValueError("Analyst notes require paragraphs or a structured object")
+        fields = (*FIELDS, *RESEARCH_FIELDS) if prose.get("schema_version", 1) >= 3 else FIELDS
         note = {
             field: value.get(field, [] if field in ("paragraphs", "conditions") else "")
-            for field in (*FIELDS, "paragraphs")
+            for field in (*fields, "paragraphs")
         }
         for field, text in note.items():
             if field in ("conditions", "paragraphs"):
@@ -50,7 +52,7 @@ def normalize_notes(prose, stock, as_of):
             elif not isinstance(text, str):
                 raise ValueError("Analyst judgments must be text")
         notes[role] = note
-        missing[role] = [field for field in (*FIELDS, "paragraphs") if not note[field]]
+        missing[role] = [field for field in (*fields, "paragraphs") if not note[field]]
     return notes, missing
 
 
@@ -111,10 +113,16 @@ def role_notes(role, note, refs, unresolved):
         + "</p></div>"
     )
     for field, label in (
+        ("primary_claim", "主要主張"),
+        ("quantified_evidence", "量化證據"),
+        ("strongest_counterevidence", "最強反證"),
+        ("confidence", "信心及區間限制"),
         ("evidence_change", "新增證據改變了什麼"),
         ("stronger_case", "哪個論點較有說服力"),
         ("disagreement", "關鍵分歧"),
     ):
+        if field in RESEARCH_FIELDS and field not in note:
+            continue
         out += (
             '<div class="judgment"><h3>'
             + label

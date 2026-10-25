@@ -20,6 +20,13 @@
 原預測用 `track-release` 追加初次公告評分與更正版診斷；不改原值、發布時間或已交付報告。
 詳見 [審查規則、輸入契約與追蹤](docs/taiwan/review-rules.md)。
 
+日常 `upgrade` 新增財務傳導、現金品質、公司研究規則、反向估值與完整證據包。
+可用 `--extension-input` 載入原件綁定假設，用 `--debate-input` 載入真實獨立開場、
+一輪交叉反駁與風險裁決；三位分析師正文保留，原稿及前後立場另存。
+選用 `--pdf-font` 產生含圖表的紙本版，`evidence.zip` 同時包含數據、原件與計算。
+5／10／20日歷史價重播明列回顧診斷；不將情境R、PE敏感度或未校準信心當績效。
+詳見 [財務模型與證據交付契約](docs/taiwan/research-model.md)。
+
 在 Codex 開啟本機儲存庫及下載的資料包後，可輸入：
 
 ```text
@@ -543,6 +550,40 @@ success does not establish forecast accuracy. Reports and raw Sponsor data remai
 artifacts, never committed datasets.
 
 ## Contributing
+
+Taiwan research now supports explicit historical/latest knowledge boundaries, an
+all-category MOPS material-event gate, issuer capital timelines, partial or complete
+four-quarter waterfalls, distinct operating equations for foundry/thermal/ODM,
+horizon-matched retrospective revenue diagnostics, and fixed-rule walk-forward
+reports. Missing inputs stay unavailable; small samples do not display misleading
+win rates. The extended Sponsor workflow captures the announcement search without
+forwarding FinMind credentials. Operational acceptance and research completeness
+are separate. See [research completeness and daily integration](docs/taiwan/research-completeness.md)
+for the CLI, evidence contracts and limitations. No paid LLM API or order execution
+is used by this research path.
+
+Research acceptance now reconciles the captured official announcement index with
+reviewed originals, preserves fixed PE sample/version receipts, and grades future
+earnings outputs separately from issued-share reference quotients. Explicit joint
+sensitivities, dilution arithmetic and raw-price execution checks do not establish
+calibrated predictions or trading alpha. See the [v3 acceptance contracts](docs/taiwan/v3-acceptance.md)
+for blocked-source states, reproducibility, parameters and clustered evaluation.
+
+Opt-in `capture-originals` archives bounded public MOPS responses; offline
+`audit-announcements` applies the same issuer, period, content and byte checks as
+daily research. Annual filing lists, blank HTTP-200 pages and missing server-total
+evidence remain pending. See [announcement original acceptance](docs/taiwan/announcement-originals.md).
+
+`audit-filing-links` verifies listing/form/PDF chains while keeping historical
+event-version identity separate. ezSearch is a selected disclosure index; even a
+bound row total cannot certify the whole MOPS universe. See [filing version and source scope](docs/taiwan/filing-version-links.md).
+
+`refresh-sources` maintains an append-only public official-source ledger for
+financial files/notes, monthly revenue, capital registration, prospectuses and
+correction queries. Reports distinguish scoped current facts from historical
+point-in-time readiness and export their source/version chain. Missing originals
+and unresolved event mappings remain pending. See [official-source registry](docs/taiwan/official-source-registry.md)
+for source scopes, rolling plans, refusal handling and report integration.
 
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
