@@ -1,5 +1,10 @@
 # Taiwan TradingAgents — 台股資料與 Codex 多 Agent 研究
 
+台股 V5 審查已接入日常報告：官方事件狀態差集、參數完整性／證據／校準分流、
+版本損益差異橋、同口徑歷史 PE 拒絕條件，以及整包離線附件驗收。
+詳見 [V5 驗收契約](docs/taiwan/v5-research-validation.md)。未校準假設不代表最可能情境；
+來源或實績缺口仍保留，不以程式測試通過冒充預測績效。
+
 已新增 **Codex 原生多 Agent 研究入口**：FinMind Sponsor 資料由 GitHub Secret
 `FINMIND_TOKEN` 準備；下載資料包後，Codex 用 ChatGPT 登入主持多方／空方／風險辯論。
 不需要 OpenAI API Key，仍會消耗你的 Codex 方案額度，額度不足停止，不切換付費 API。

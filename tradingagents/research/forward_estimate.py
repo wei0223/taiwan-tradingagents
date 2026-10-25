@@ -18,7 +18,10 @@ from .scenarios import finite, next_quarters
 
 def ttm(rows, documents, context, stock):
     """Only directly disclosed quarterly diluted EPS; never annual-minus-nine-month EPS."""
-    if len(rows) != 4:
+    from tradingagents.dataflows.taiwan.periods import superseded_documents
+
+    superseded = superseded_documents(documents, stock, context["cutoff_at"])
+    if len(rows) != 4 or any(r.get("source_id") in superseded for r in rows):
         return {
             "status": "unavailable",
             "eps_twd": None,

@@ -135,6 +135,10 @@ def parameter_register(forward, metadata, documents, cutoff):
     observation date, uncertainty and review; future actuals are not required.
     Legacy arithmetic without these fields remains a stress illustration.
     """
+    from tradingagents.dataflows.taiwan.periods import superseded_documents
+
+    stock = next((d.get("stock_id") for d in documents.values()), None)
+    superseded = superseded_documents(documents, stock, cutoff)
     result = []
     for scenario, model in forward.get("scenarios", {}).items():
         for case in model["quarters"]:
@@ -169,6 +173,8 @@ def parameter_register(forward, metadata, documents, cutoff):
                         valid = False
                     for s in source:
                         doc = documents[s]
+                        if s in superseded:
+                            valid = False
                         if timestamp(doc["captured_at"]) > timestamp(cutoff):
                             valid = False
                         if doc.get("published_at") and timestamp(doc["published_at"]) > timestamp(
@@ -280,7 +286,10 @@ def assess(snapshot, result, inputs=None, documents=None):
     rows = parameter_register(
         plan.get("forward", {}), inputs.get("forward_parameter_metadata", {}), documents, cutoff
     )
-    earnings = bool(completeness.get("announced_earnings_periods"))
+    # A known reviewed Q2 remains an available actual even when Q3 publication
+    # history is unresolved. Index completeness is an independent gate.
+    earnings = result.get("review", {}).get("axes", {}).get("accounting_earnings", {}).get("current", {}).get("eps_twd") is not None
+    earnings = earnings or bool(completeness.get("announced_earnings_periods"))
     gates = {
         "vendor_schema_valid": "PASS" if result["source_audit"]["status"] == "passed" else "FAIL",
         "official_index_covered": "PASS" if coverage_ok else "FAIL",

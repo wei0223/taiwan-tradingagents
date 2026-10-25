@@ -651,6 +651,32 @@ def render_pdf(directory, font_path):
             )
         )
 
+    v5 = data.get("v5_review", {})
+    if v5.get("status") == "reviewed_with_explicit_gaps":
+        story += [p("V5：模型差異與驗證限制", "h2")]
+        story += [p(text, "small") for text in v5["summary"]]
+        state_counts = {}
+        for row in v5["events"]["events"]:
+            state_counts[row["status"]] = state_counts.get(row["status"], 0) + 1
+        story.append(table(["官方事件狀態", "筆數"], sorted(state_counts.items()), [125*mm,45*mm]))
+        diagnostic = [r for r in v5["calibration"]["revenue_diagnostics"] if r["horizon_months"] in (1,3,12)]
+        if diagnostic:
+            story.append(p("營收回補診斷（不是嚴格 PIT 或前瞻績效）", "h3"))
+            story.append(table(["月距", "樣本數", "季節／趨勢／動能 MAE（億元）"],
+                [[r["horizon_months"], r["n"], ' / '.join(f"{r['mae_twd'][m]/1e8:.2f}" if r['mae_twd'][m] is not None else '不可用'
+                  for m in ('seasonal_naive','log_trend','monthly_momentum'))] for r in diagnostic],
+                [25*mm,25*mm,120*mm]))
+        for row in v5["revision_bridge"].get("rows", []):
+            if row["scenario"] == "base" and row["steps"]:
+                story.append(p(row["period"] + " 基準版本差異（順序歸因，不代表準確度提高）", "h3"))
+                story.append(table(["變數", "舊值→新值", "歸母差額（億）"],
+                    [[s["driver"], str(s["old"]) + " → " + str(s["new"]),
+                      f"{s['delta']['parent_profit_twd']/1e8:.4f}"] for s in row["steps"]],
+                    [53*mm,77*mm,40*mm]))
+                if row.get("normalization_review", {}).get("matches_removed_fx_and_fair_value"):
+                    story.append(p("舊版另排除匯兌與評價利益，新版沿用Q2淨業外。屬常態化假設改變，不是公司重編，也未證明預測更準。", "small"))
+        story.append(p("逐筆公告差集、逐參數替代值／敏感度、歷史樣本及逐點PE口徑請見同包HTML與v5-review.json。缺少已公布原件是MISSING_PUBLISHED；公告時間未證明不得標為尚未發布。", "small"))
+
     def footer(canvas, doc):
         canvas.setFont("ResearchCJK", 7.5)
         canvas.setFillColor(colors.HexColor("#536c7c"))

@@ -75,6 +75,7 @@ def resolve(review, stock, cutoff):
         raise ValueError("Financial review company mismatch")
     cutoff = cutoff_time(cutoff)
     docs = review.get("documents", {})
+    superseded = superseded_documents(docs, stock, cutoff)
     rows, rejected, observations = [], [], {}
     for obs in review.get("observations", []):
         identifier = obs["id"]
@@ -126,6 +127,8 @@ def resolve(review, stock, cutoff):
                 raise ValueError("Distinct original references required")
             for key in refs:
                 _document(docs[key], stock, cutoff)
+                if key in superseded:
+                    raise ValueError("Selected original superseded by a known correction; review replacement and recompute")
             known_dates = [cutoff_time(docs[k].get("published_at") or docs[k]["captured_at"])
                            for k in refs]
             if max(known_dates).astimezone(TAIPEI).date() < end:
@@ -190,7 +193,32 @@ def resolve(review, stock, cutoff):
         else:
             selected.append(next((r for r in candidates if r["method"] == "reviewed_direct_observation"), candidates[0]))
     return {"rows": selected, "rejected": rejected,
-            "status": "partial" if rejected else "reviewed", "eps_or_share_differencing": False}
+            "status": "partial" if rejected else "reviewed", "eps_or_share_differencing": False,
+            "superseded_documents": superseded}
+
+
+def superseded_documents(documents, stock, cutoff):
+    """A captured correction invalidates its predecessor, never a future correction.
+
+    The successor must bind eligible original bytes. This conservative invalidation
+    does not certify replacement numbers or historical initial-version completeness.
+    """
+    cutoff = cutoff_time(cutoff) if isinstance(cutoff, str) else cutoff
+    result = {}
+    for key, doc in documents.items():
+        parent = doc.get("supersedes")
+        if parent not in documents or parent == key:
+            continue
+        try:
+            _document(doc, stock, cutoff)
+        except (KeyError, TypeError, ValueError):
+            continue
+        prior = documents[parent]
+        if (prior.get("stock_id") == stock and prior.get("sha256") != doc.get("sha256")
+                and cutoff_time(prior.get("published_at") or prior["captured_at"])
+                < cutoff_time(doc.get("published_at") or doc["captured_at"])):
+            result[parent] = key
+    return result
 
 
 def refresh_snapshot(snapshot, review=None):

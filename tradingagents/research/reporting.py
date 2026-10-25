@@ -260,6 +260,11 @@ def package(
         result["forward_estimate"] = estimate
         result["forecast_preservation"]["separate_new_model_version"] = estimate.get("model_version")
         estimate_section = render_estimate(estimate, table)
+    from .v5_review import build as build_v5, render as render_v5
+
+    result["v5_review"] = build_v5(snapshot, result, extension_input or {},
+                                   (review_input or {}).get("documents", {}))
+    v5_section = render_v5(result["v5_review"], table)
     if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
         decision["current_trade_conclusion_allowed"] = False
         decision["publication_status"] = "BLOCKED_STALE_OR_UNVERIFIED_MARKET"
@@ -621,6 +626,7 @@ def package(
         + period_section
         + publishing_section
         + estimate_section
+        + v5_section
         + dashboard
         + registry_section
         + summary
@@ -684,7 +690,17 @@ def package(
             extension = ".pdf" if content.startswith(b"%PDF") else ".bin"
             (documents / (doc["sha256"] + extension)).write_bytes(content)
     write_json(output / "research.json", result)
+    observation = {"recorded_at": result["generated_at"], "stock_id": stock,
+                   "data_as_of": as_of, "input_snapshot_sha256": fingerprint(source_snapshot),
+                   "reviewed_snapshot_sha256": fingerprint(snapshot),
+                   "research_sha256": fingerprint(result),
+                   "forward_model_sha256": result.get("forward_estimate", {}).get("model_sha256"),
+                   "new_forecast_issued": False,
+                   "kind": "immutable_daily_research_observation_not_prediction_release"}
+    observation["record_sha256"] = fingerprint(observation)
+    write_json(output / "research-observation.json", observation)
     write_json(output / "publishing-quality.json", publication)
+    write_json(output / "v5-review.json", result["v5_review"])
     if result.get("forward_estimate"):
         write_json(output / "forward-estimate.json", result["forward_estimate"])
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
