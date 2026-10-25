@@ -11,6 +11,13 @@ from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlsplit
 
 STATEMENTS = {"F26": "資產負債表", "F27": "綜合損益表", "F28": "現金流量表", "F29": "權益變動表"}
+RESTRICTION_TERMS = ("查詢過於頻繁", "存取遭拒", "查詢過量")
+
+
+def source_restricted(raw):
+    return any(
+        term.encode(encoding) in raw for term in RESTRICTION_TERMS for encoding in ("utf8", "cp950")
+    )
 
 
 def compact(value):
@@ -117,7 +124,7 @@ def review_original(row, receipt):
     parser, encoding = html_data(raw)
     text = compact(" ".join(parser.parts))
     base["encoding"] = encoding
-    if any(term in text for term in ("查詢過於頻繁", "您查詢過於頻繁", "存取遭拒")):
+    if any(term in text for term in RESTRICTION_TERMS):
         return {**base, "status": "source_rejected", "reason": "source_restriction"}
     issuer = compact(row.get("COMPANY_NAME", ""))
     issuer_matches = bool(

@@ -17,6 +17,11 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    registry = commands.add_parser("refresh-sources", help="Capture official source families into a persistent local version ledger; no secrets")
+    registry.add_argument("--plan", type=Path, required=True)
+    registry.add_argument("--archive-dir", type=Path, required=True)
+    registry.add_argument("--output-dir", type=Path, required=True)
+    registry.add_argument("--review-input-dir", type=Path)
     filing_links = commands.add_parser("audit-filing-links", help="Offline listing/form/PDF chain audit; preserve historical event ambiguity")
     filing_links.add_argument("--input", type=Path, required=True)
     filing_links.add_argument("--output-dir", type=Path, required=True)
@@ -97,6 +102,8 @@ def main(argv=None, provider=None, material_client=None):
     upgrade.add_argument("--research-plan", type=Path, help="Exact mode/cutoff, material announcement coverage, capital and four-quarter models")
     upgrade.add_argument("--debate-input", type=Path, help="Actual independent openings, rebuttals, risk and evidence-led rulings")
     upgrade.add_argument("--pdf-font", type=Path, help="Optional PDF edition: installed CJK TrueType font; requires reportlab")
+    upgrade.add_argument("--official-source-store", type=Path)
+    upgrade.add_argument("--official-source-snapshot")
     validation = commands.add_parser("validate-forecasts", help="Score sealed forecasts only after actual publication")
     validation.add_argument("--input", type=Path, required=True)
     validation.add_argument("--output", type=Path, required=True)
@@ -119,6 +126,15 @@ def main(argv=None, provider=None, material_client=None):
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "refresh-sources":
+            from .source_registry import refresh
+
+            plan = load_json(args.plan)
+            reviews = ({c["stock_id"]: load_json(args.review_input_dir / (c["stock_id"] + ".json")) for c in plan["companies"]}
+                       if args.review_input_dir else None)
+            result = refresh(plan, args.archive_dir, args.output_dir, reviews=reviews)
+            print(json.dumps({"companies": list(result["companies"]), "requests": result["request_count"], "pdfs": result["pdf_count"]}))
+            return 0
         if args.command == "audit-filing-links":
             from .filing_link_audit import audit as audit_filing_links
 
@@ -185,7 +201,8 @@ def main(argv=None, provider=None, material_client=None):
                              load_json(args.review_input) if args.review_input else None,
                              args.release, load_json(args.actuals) if args.actuals else None,
                              extension,
-                             load_json(args.debate_input) if args.debate_input else None, args.pdf_font)
+                             load_json(args.debate_input) if args.debate_input else None, args.pdf_font,
+                             args.official_source_store, args.official_source_snapshot)
             print(json.dumps({"stock_id": result["stock_id"], "decision": result["decision"]["state"],
                               "forecast": result["forecast"]["status"], "source_audit": result["source_audit"]["status"],
                               "review_axes": {k: v["status"] for k, v in result["review"]["axes"].items()}}))

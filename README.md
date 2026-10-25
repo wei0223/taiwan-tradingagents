@@ -578,6 +578,13 @@ evidence remain pending. See [announcement original acceptance](docs/taiwan/anno
 event-version identity separate. ezSearch is a selected disclosure index; even a
 bound row total cannot certify the whole MOPS universe. See [filing version and source scope](docs/taiwan/filing-version-links.md).
 
+`refresh-sources` maintains an append-only public official-source ledger for
+financial files/notes, monthly revenue, capital registration, prospectuses and
+correction queries. Reports distinguish scoped current facts from historical
+point-in-time readiness and export their source/version chain. Missing originals
+and unresolved event mappings remain pending. See [official-source registry](docs/taiwan/official-source-registry.md)
+for source scopes, rolling plans, refusal handling and report integration.
+
 Contributions are welcome: bug fixes, documentation, and feature ideas; past contributions are credited per release in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Citation

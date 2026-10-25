@@ -50,6 +50,8 @@ def package(
     extension_input=None,
     debate_input=None,
     pdf_font=None,
+    official_source_store=None,
+    official_source_snapshot=None,
 ):
     output = Path(output_dir)
     # Review editions must never overwrite a delivered report or a sealed source run.
@@ -65,8 +67,12 @@ def package(
         from .vintages import verify_receipt_times
 
         ctx = context(plan_spec["context"], snapshot["instrument"]["stock_id"], snapshot["as_of"])
-        review_input = copy.deepcopy(review_input or {"stock_id": snapshot["instrument"]["stock_id"]})
-        if review_input.get("cutoff_at") and timestamp(review_input["cutoff_at"]) != timestamp(ctx["cutoff_at"]):
+        review_input = copy.deepcopy(
+            review_input or {"stock_id": snapshot["instrument"]["stock_id"]}
+        )
+        if review_input.get("cutoff_at") and timestamp(review_input["cutoff_at"]) != timestamp(
+            ctx["cutoff_at"]
+        ):
             raise ValueError("Review and research plan must use the same exact cutoff")
         review_input["cutoff_at"] = ctx["cutoff_at"]
         if ctx["mode"] != "retrospective_diagnostic":
@@ -164,6 +170,65 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    registry_section = ""
+    if bool(official_source_store) != bool(official_source_snapshot):
+        raise ValueError("Official source store and snapshot are required together")
+    if official_source_store:
+        from tradingagents.dataflows.taiwan.source_store import SourceStore
+
+        from .source_registry import assess
+
+        source_store = SourceStore(official_source_store)
+        state = source_store.read_snapshot(official_source_snapshot)
+        if state["stock_id"] != stock:
+            raise ValueError("Registry company mismatch")
+        from .review import _end_of_day
+        from .scenarios import timestamp
+
+        report_cutoff = (
+            timestamp(review_input["cutoff_at"])
+            if (review_input or {}).get("cutoff_at")
+            else _end_of_day(as_of)
+        )
+        if timestamp(state["captured_at"]) > report_cutoff:
+            raise ValueError("Registry snapshot after report cutoff")
+        registry = assess(source_store, official_source_snapshot, review_input)
+        result["official_source_registry"] = registry
+        registry_section = (
+            '<section id="official-source-registry"><h2>正式來源與可用範圍</h2><p>來源查核時間：'
+            + html.escape(registry["source_checked_at"])
+            + "。行情資料日仍以上方標示為準。</p>"
+        )
+        registry_section += table(
+            ["判定", "結果"],
+            [
+                ["目前研究", "已核對事實可用，完整研究仍有缺口"],
+                [
+                    "本輪原件與已審查財報版本一致",
+                    registry["current_facts"][
+                        "source_matched_previously_reviewed_financial_numbers"
+                    ],
+                ],
+                [
+                    "本輪原件與已審查單季現金流版本一致",
+                    registry["current_facts"]["source_matched_reviewed_single_quarter_cash"],
+                ],
+                [
+                    "指定月營收原件",
+                    registry["current_facts"]["specified_monthly_revenue_originals_available"],
+                ],
+                ["歷史嚴格回測", "未通過：缺逐歷史截止時點的當時版本"],
+                ["七筆歷史事件／版本對應", "仍待官方可驗證紀錄"],
+            ],
+        )
+        if registry["current_issued_share_reference"]:
+            capital = registry["current_issued_share_reference"]
+            registry_section += (
+                "<p>本次公司基本資料的已發行普通股數為 "
+                + f"{capital['shares']:,}"
+                + " 股；僅代表捕獲時觀測值，不是季度加權稀釋股數或流通股數。不可用於回填歷史比率。</p>"
+            )
+        registry_section += '<p>來源拒絕、空白或缺件不否定舊版原件曾披露的數值，也不能證明目前未更正。已審查會計數值、現金回收、募資完成、估值與交易訊號仍各自判定。</p><p><a href="official-sources/assessment.json">來源台帳與逐類缺口</a></p></section>'
     result["retrospective_model"] = bool(
         (specification and specification.get("created_at", "")[:10] > as_of)
         or (extra["financial_cases"] and result["generated_at"][:10] > as_of)
@@ -533,6 +598,7 @@ def package(
         + introduction(stock, as_of, result["generated_at"], dynamics.get("latest_session"))
         + reading_gap
         + dashboard
+        + registry_section
         + summary
         + analyst_sections
         + extension_appendix
@@ -548,6 +614,9 @@ def package(
         raise ValueError("Nonportable report")
     result["html_audit"] = links
     output.mkdir(parents=True, exist_ok=True)
+    if official_source_store:
+        source_store.export(official_source_snapshot, output / "official-sources" / "ledger")
+        write_json(output / "official-sources" / "assessment.json", registry)
     for path, content in review_assets.items():
         target = output / path
         target.parent.mkdir(exist_ok=True)
@@ -557,7 +626,20 @@ def package(
     write_json(output / "reading-review.json", result["reading_review"])
     write_json(output / "review.json", reviewed)
     write_json(output / "review-input.json", review_input or {})
-    write_json(output / "source-ledger.json", [{"id": key, **{k: v for k, v in doc.items() if k not in {"content_base64", "rows", "raw_response_utf8", "raw_rows"}}} for key, doc in (review_input or {}).get("documents", {}).items()])
+    write_json(
+        output / "source-ledger.json",
+        [
+            {
+                "id": key,
+                **{
+                    k: v
+                    for k, v in doc.items()
+                    if k not in {"content_base64", "rows", "raw_response_utf8", "raw_rows"}
+                },
+            }
+            for key, doc in (review_input or {}).get("documents", {}).items()
+        ],
+    )
     write_json(output / "extension.json", extra)
     write_json(output / "extension-input.json", extension_input or {})
     write_json(output / "debate-review.json", debate_review)

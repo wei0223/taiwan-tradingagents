@@ -17,7 +17,6 @@ def render_pdf(directory, font_path):
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import (
         CondPageBreak,
-        PageBreak,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
@@ -244,6 +243,48 @@ def render_pdf(directory, font_path):
             p("倍數軸來自來源報列歷史分位數，只作敏感度。不是已觀測市場共識或合理價。", "small"),
         ]
     pe_story = []
+    registry = data.get("official_source_registry")
+    if registry:
+        facts = registry["current_facts"]
+        story += [
+            p("正式來源驗收與研究範圍", "h3"),
+            p(
+                "來源查核 "
+                + registry["source_checked_at"]
+                + "；本次來源台帳不更新行情或重新執行Agent辯論。",
+                "small",
+            ),
+            table(
+                ["項目", "結果"],
+                [
+                    ["目前事實研究", "已審查版本可用；完整來源覆蓋仍有缺口"],
+                    [
+                        "本輪財報／單季現金流版本重核",
+                        (
+                            "相符"
+                            if facts["source_matched_previously_reviewed_financial_numbers"]
+                            else "待核對"
+                        )
+                        + "／"
+                        + (
+                            "相符"
+                            if facts["source_matched_reviewed_single_quarter_cash"]
+                            else "待核對"
+                        ),
+                    ],
+                    ["歷史嚴格回測", "未通過；現今補件不能回填為當年已知"],
+                    ["七筆事件版本對應", "待官方事件與檔名／版本紀錄"],
+                ],
+                [65 * mm, 109 * mm],
+            ),
+        ]
+        if registry.get("current_issued_share_reference"):
+            story.append(
+                p(
+                    f"本次觀測已發行普通股數 {registry['current_issued_share_reference']['shares']:,} 股，非季度加權稀釋或流通股數，不用於回填歷史比率。",
+                    "small",
+                )
+            )
     receipt = extra["valuation"].get("sample_receipt", {})
     version = extra["valuation"].get("version_comparison", {})
     if receipt:
@@ -266,7 +307,7 @@ def render_pdf(directory, font_path):
 
     plan_rows = plan_sections(extra.get("research_plan", {}))
     if plan_rows:
-        story += [PageBreak(), p("時間、股本與未來四季驗收", "h2"), *pe_story]
+        story += [CondPageBreak(45 * mm), p("時間、股本與未來四季驗收", "h2"), *pe_story]
         for heading, rows in plan_rows:
             if heading == "最新行情另列核對":
                 rows = rows[:1]
@@ -530,7 +571,7 @@ def render_pdf(directory, font_path):
             "small",
         ),
     ]
-    cited = {"q1", "q2", "Ntsmc_q3_financial"}
+    cited = {"q1", "q2", "Ntsmc_q3_financial", "registry_basic"}
     cited |= {key for key in citation_urls if "F03" in key}
     story.append(
         p(

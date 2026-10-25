@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 from .filings import ENDPOINT, HOST, ListingParser
-from .originals import compact, html_data, review_original
+from .originals import compact, html_data, review_original, source_restricted
 from .publications import roc_date
 
 
@@ -27,7 +27,11 @@ class FilingRows(ListingParser):
 
 def bytes_from(receipt):
     raw = base64.b64decode(receipt["content_base64"], validate=True)
-    if hashlib.sha256(raw).hexdigest() != receipt["sha256"] or receipt.get("http_status") != 200:
+    if (
+        hashlib.sha256(raw).hexdigest() != receipt["sha256"]
+        or receipt.get("http_status") != 200
+        or source_restricted(raw)
+    ):
         raise ValueError("Unverified official response bytes")
     return raw
 
