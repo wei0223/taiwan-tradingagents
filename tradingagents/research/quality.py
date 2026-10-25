@@ -74,7 +74,7 @@ def source_audit(snapshot):
                     issues.append({"dataset": dataset, "issue": "duplicate eligible record"})
                 seen.add(identity)
                 basis = (
-                    "vendor_assumed_single_quarter_unreviewed"
+                    "vendor_period_unknown_excluded_from_quarter_metrics"
                     if dataset == FINANCIAL
                     else (
                         "as_reported_unknown_cumulative_basis"

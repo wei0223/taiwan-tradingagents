@@ -19,6 +19,8 @@ def main(argv=None, provider=None):
     parser.add_argument("--mops-publications", action="store_true")
     parser.add_argument("--extended", action="store_true")
     parser.add_argument("--news-days", type=int, default=3)
+    parser.add_argument("--financial-period-review", type=Path,
+                        help="Reviewed per-field observations and original documents; dates alone never certify quarters")
     args = parser.parse_args(argv)
     try:
         if provider is None:
@@ -36,6 +38,10 @@ def main(argv=None, provider=None):
             else:
                 provider = TaiwanMarketDataProvider(publication_resolver=resolver)
         result = provider.snapshot(args.symbol, args.start, args.as_of)
+        if args.financial_period_review:
+            from .periods import refresh_snapshot
+
+            result = refresh_snapshot(result, json.loads(args.financial_period_review.read_text(encoding="utf8")))
     except (VendorError, ValueError) as exc:
         print(json.dumps({"status": "unavailable", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
