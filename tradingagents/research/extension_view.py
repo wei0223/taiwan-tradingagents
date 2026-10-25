@@ -206,6 +206,8 @@ def render(extra, debate, snapshot, table):
         + "。風報比不是勝率；5／10／20日的成本後重播與樣本限制另存 extension.json。</p>"
     )
     replay = extra["backtest"]
+    if not replay.get("splits"):
+        appendix += "<p>本版回測不可延長：" + esc(replay.get("reason", "缺完整資料或固定規則")) + "。舊事件保存在證據附件；樣本不足，不宣稱策略優勢。</p>"
     if replay.get("splits"):
         appendix += table(
             ["區間／期限", "事件數", "成本後勝率", "淨報酬中位數", "最差單筆標記收盤回撤"],

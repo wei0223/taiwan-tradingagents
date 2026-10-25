@@ -157,12 +157,36 @@ def render_pdf(directory, font_path):
             "small",
         ),
         p(
-            "本版重審所列資料截止日的既有證據，不代表產生日期的即時資料。原Agent提交保持原日期，本版新增計算不宣稱已重新辯論。已公布實績不計預測命中。完整原件、模型與辯論另附證據包。"
+            "本版行情已更新至應有最後交易日；財報及各參數仍各列期間與公布時間。前瞻數字是新版本的條件推估，未重新執行獨立Agent辯論，已公布實績不計預測命中。"
+            if (extra.get("research_plan", {}).get("context") or {}).get("mode") == "latest_research"
+            else "本版重審所列資料截止日的既有證據，不代表產生日期的即時資料。原Agent提交保持原日期，本版新增計算不宣稱已重新辯論。已公布實績不計預測命中。完整原件、模型與辯論另附證據包。"
             if extra.get("research_plan", {}).get("context")
             else "本版為既有資料的模型與論述升級，非即時更新或事前預測。完整證據包含所有引用資料、計算、獨立Agent原稿與檢查；PDF不是完整重現資料的替代品。",
             "small",
         ),
     ]
+    publishing = data.get("publishing_quality")
+    if publishing:
+        market = publishing["latest_market_gate"]
+        story += [p("發布資格與資料時效", "h2"),
+                  p("發布狀態 " + publishing["publishing_status"] + "；完整估值 " + publishing["full_valuation_status"]),
+                  p("應有最後交易日 " + str(market["expected_last_session"]) + "；行情狀態 " + market["freshness"]),
+                  table(["檢查", "結果"], list(publishing["gates"].items()), [130 * mm, 40 * mm]),
+                  p("當前交易結論 BLOCKED；下文保留歷史觀察，R僅情境測量。" if not market["current_trade_conclusion_allowed"] else "當期行情通過時效檢查；仍須個別訊號及成本驗證。", "small"),
+                  p("前瞻估值未完成的原因與每季假設狀態，見同包 publishing-quality.json；條件EPS不冒充已驗證分母。", "small")]
+    estimate = data.get("forward_estimate")
+    if estimate:
+        scenario_labels = {"bear": "保守假設", "base": "基準假設（非機率最可能）", "bull": "樂觀假設"}
+        story += [p("四季 EPS 預估與條件估值", "h2"), p(estimate["methodology"], "small"),
+                  p("未來參數是明示推估；合理價與低估排名尚未成立。四季EPS和不是法定全年加權EPS。", "small"),
+                  table(["情境", "四季EPS和（元）", "Forward PE（條件）"],
+                        [[scenario_labels[n],f"{s['four_quarter_eps_sum_twd']:.2f}" if s['four_quarter_eps_sum_twd'] is not None else "BLOCKED",f"{s['forward_pe']:.2f}" if s['forward_pe'] is not None else "不可用"] for n,s in estimate['scenarios'].items()], [80*mm,45*mm,45*mm]),
+                  table(["季度／基準", "營收億", "毛利億", "歸母億", "稀釋EPS"],
+                        [[c['period'],*[f"{c[k]/1e8:.2f}" if c[k] is not None else "未知" for k in ['revenue_twd','gross_profit_twd','parent_profit_twd']],f"{c['eps_twd']:.2f}" if c['eps_twd'] is not None else "未知"] for c in estimate['scenarios'].get('base',{}).get('quarters',[])], [30*mm,35*mm,35*mm,35*mm,35*mm]),
+                  p("EPS × PE 敏感度矩陣（條件價格，非合理價）", "h3"),
+                  table(["情境／PE",*estimate['pe_sensitivity']],[[n,*[f"{v:.0f}" for v in s['price_sensitivity_twd']]] for n,s in estimate['scenarios'].items()],[35*mm,*([27*mm]*len(estimate['pe_sensitivity']))]),
+                  p("TTM：" + (f"直接報列四季稀釋EPS和 {estimate['ttm']['eps_twd']:.2f} 元；不是法定年度EPS。" if estimate['ttm'].get('eps_twd') is not None else "缺四季直接稀釋EPS原件，不以年度減前三季或vendor PE反推。"),"small"),
+                  p("完整逐參數依據、股數橋接、逆推門檻與敏感度見forward-estimate.json及HTML；沒有新獨立Agent辯論。","small")]
     story += [
         table(
             ["研究面向", "目前可證明的內容"],
@@ -572,6 +596,8 @@ def render_pdf(directory, font_path):
         ),
     ]
     cited = {"q1", "q2", "Ntsmc_q3_financial", "registry_basic"}
+    if estimate:
+        cited |= {r["source_id"] for r in estimate["ttm"].get("quarters", [])}
     cited |= {key for key in citation_urls if "F03" in key}
     story.append(
         p(

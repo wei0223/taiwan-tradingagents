@@ -602,3 +602,20 @@ Please reference our work if you find *TradingAgents* provides you with some hel
       url={https://arxiv.org/abs/2412.20138}, 
 }
 ```
+
+## 台股報告發布資格（v4）
+
+日常 `upgrade` 現在會產生獨立的 `publishing-quality.json`：供應商結構、官方
+公告覆蓋、原件、版本、財報、股本、行情與前瞻參數逐項判定。首頁與 PDF
+顯示 PASS／PARTIAL／BLOCKED；行情過期禁止當前交易結論，缺稀釋分母禁止
+Forward PE、合理價與低估排名。條件試算仍可閱讀，不把缺值補零。
+
+HTML 改用輕量正文與相對附件連結；完整 JSON／原件／Agent 紀錄放在證據包，
+附 SHA256 清單。小樣本維持 `strategy_performance.status=insufficient_sample`。
+TWSE 同月原始行情／法人可用不讀 Token 的 `refresh-market` 補件；還原價仍
+須單獨更新及驗收。用法、假設契約與驗收標準見 [發布資格文件](docs/taiwan/publishing-quality.md)。
+
+`upgrade` 也支援 [四季條件 EPS 與估值](docs/taiwan/forward-estimates.md)：使用公司專屬、
+來源綁定的前瞻假設，輸出逐季損益、四季稀釋 EPS 和、條件 Forward PE、EPS×PE
+矩陣與反向估值。未來參數不必等待實績，但缺參數不補零；官方覆蓋缺口、
+條件預測與合理價資格分開。TTM 缺直接單季稀釋原件時保持不可用。

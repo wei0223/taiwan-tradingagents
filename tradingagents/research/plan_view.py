@@ -303,17 +303,11 @@ def sections(plan):
     total = illustration.get("four_quarter_reference_totals", {}).get("base", {})
     q = total.get("four_quarter_parent_profit_per_current_issued_share_twd")
     if q is not None:
-        multiple = total.get("conditional_market_cap_to_parent_profit_multiple")
         irows.append(
             (
                 "四季條件尺度",
                 f"四季歸母合計／目前已發行股數 {q:.2f}元"
-                + (
-                    f"；參考股價日期{total['price_reference']['date']}，市值／條件歸母{multiple:.2f}倍"
-                    if multiple is not None
-                    else ""
-                )
-                + "。不是NTM稀釋EPS、Forward PE或合理價。",
+                + "。僅保留損益壓力尺度；條件市值倍數移至證據 JSON，不作估值展示。不是NTM稀釋EPS、Forward PE或合理價。",
             )
         )
     if irows:

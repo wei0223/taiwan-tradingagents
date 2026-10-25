@@ -4,7 +4,6 @@ import base64
 import copy
 import hashlib
 import html
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -163,7 +162,7 @@ def package(
         "independent_agents_executed": debate_review["independent_agents_executed"],
         "prediction_accuracy": {"status": "pending_future_actuals", "mae": None},
         "strategy_performance": {
-            "status": "unavailable",
+            "status": "insufficient_sample",
             "reason": "No sealed comparable prospective signals and resolved outcomes",
         },
         "llm_api_calls": False,
@@ -229,6 +228,29 @@ def package(
                 + " 股；僅代表捕獲時觀測值，不是季度加權稀釋股數或流通股數。不可用於回填歷史比率。</p>"
             )
         registry_section += '<p>來源拒絕、空白或缺件不否定舊版原件曾披露的數值，也不能證明目前未更正。已審查會計數值、現金回收、募資完成、估值與交易訊號仍各自判定。</p><p><a href="official-sources/assessment.json">來源台帳與逐類缺口</a></p></section>'
+    from .publishing import assess as assess_publishing, render as render_publishing
+
+    publication = assess_publishing(
+        snapshot, result, extension_input, (review_input or {}).get("documents", {})
+    )
+    result["publishing_quality"] = publication
+    result["publishing_status"] = publication["publishing_status"]
+    result["latest_market_gate"] = publication["latest_market_gate"]
+    publishing_section = render_publishing(publication, table)
+    estimate_section = ""
+    if (extension_input or {}).get("forward_estimate"):
+        from .forward_estimate import build as build_estimate, render as render_estimate
+
+        estimate = build_estimate(extension_input["forward_estimate"], extra["research_plan"],
+                                  publication, (review_input or {}).get("documents", {}), stock)
+        result["forward_estimate"] = estimate
+        result["forecast_preservation"]["separate_new_model_version"] = estimate.get("model_version")
+        estimate_section = render_estimate(estimate, table)
+    if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
+        decision["current_trade_conclusion_allowed"] = False
+        decision["publication_status"] = "BLOCKED_STALE_OR_UNVERIFIED_MARKET"
+        decision["risk_reward"] = []
+        risk_scenarios = []
     result["retrospective_model"] = bool(
         (specification and specification.get("created_at", "")[:10] > as_of)
         or (extra["financial_cases"] and result["generated_at"][:10] > as_of)
@@ -259,8 +281,8 @@ def package(
         [
             [
                 labels[k],
-                status_labels[v["status"]],
-                v.get("reason", v.get("interpretation", "固定規則，未證明統計優勢")),
+                "BLOCKED：行情時效未通過" if k == "short_term" and not publication["latest_market_gate"]["current_trade_conclusion_allowed"] else status_labels[v["status"]],
+                "只供歷史情境測量" if k == "short_term" and not publication["latest_market_gate"]["current_trade_conclusion_allowed"] else v.get("reason", v.get("interpretation", "固定規則，未證明統計優勢")),
             ]
             for k, v in reviewed["axes"].items()
         ],
@@ -318,7 +340,7 @@ def package(
         )
         summary += "<p>年度欄為季度稀釋 EPS 加總近似，非經查核年度加權稀釋 EPS。來源報列本益比未核實分母口徑，因此不標為 TTM PE。情境價格不是目標價；報酬風險比若有列示，也僅依明示進場與失效假設計算，並非可執行報價或保證停損。</p>"
     else:
-        summary += "<h2>前瞻 EPS 與估值：暫停估算</h2><p>缺少經正式原件核對的季度口徑、母公司歸屬、加權股數或明示情境。缺口未補齊前，不由歷史 EPS 或新聞目標價反推。</p>"
+        summary += '<h2>前瞻 EPS 與估值：依資格分級</h2><p>可計算的條件 EPS 與缺項逐季列於上方發布資格表；完整前瞻估值未通過時不給合理價或低估排名。<a href="#publishing-quality">查看條件試算與阻擋原因</a>。</p>'
     summary += "<h2>什麼會改變各項判斷？</h2>" + table(
         ["面向", "可重算條件"], [[labels[r["axis"]], r["rule"]] for r in reviewed["conditions"]]
     )
@@ -563,26 +585,11 @@ def package(
                 ["原預測紀錄數", len(sealed["predictions"])],
                 ["初次公告主評分", tracking["primary_initial_vintage_results"]["status"]],
                 ["另選版本診斷", tracking["results"]["status"]],
-                ["模型修改", "無；若改模型另建新版本"],
+                ["原封存模型修改", "無；本版新條件模型另建版本" if result.get("forward_estimate") else "無；若改模型另建新版本"],
             ],
         )
-    # Keep raw PDF bytes in JSON/archive, never render megabytes of base64 as prose.
-    display = copy.deepcopy(result)
-    for doc in (
-        display.get("forecast", {})
-        .get("assumptions", {})
-        .get("basis_review", {})
-        .get("documents", [])
-    ):
-        doc.pop("content_base64", None)
-        doc["content_location"] = (
-            "research.json contains original document bytes; sha256 retained here"
-        )
-    details += (
-        '<details class="machine-audit no-print"><summary>來源、計算與模型完整稽核</summary><pre>'
-        + html.escape(json.dumps(display, ensure_ascii=False, indent=2))
-        + "</pre></details>"
-    )
+    # Audit payloads stay in portable attachments, never inline in the reading page.
+    details += '<section class="machine-audit no-print"><h2>完整證據與計算</h2><p><a href="research.json">計算結果</a> · <a href="publishing-quality.json">發布驗收與假設</a> · <a href="delivery-manifest.json">SHA256 清單</a> · <a href="evidence.zip">完整證據包</a>。獨立 Agent 原稿及既有辯論保存在附件，本輪未重新執行辯論。</p></section>'
     reading_gap = (
         '<p class="reading-gap">本版尚缺分析師裁決欄位或有未綁定引用；'
         "結構檢查不代表研究論點已被驗證，詳見 reading-review.json。</p>"
@@ -597,6 +604,8 @@ def package(
         + "</style></head><body><main>"
         + introduction(stock, as_of, result["generated_at"], dynamics.get("latest_session"))
         + reading_gap
+        + publishing_section
+        + estimate_section
         + dashboard
         + registry_section
         + summary
@@ -658,6 +667,9 @@ def package(
             extension = ".pdf" if content.startswith(b"%PDF") else ".bin"
             (documents / (doc["sha256"] + extension)).write_bytes(content)
     write_json(output / "research.json", result)
+    write_json(output / "publishing-quality.json", publication)
+    if result.get("forward_estimate"):
+        write_json(output / "forward-estimate.json", result["forward_estimate"])
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
     write_json(
         output / "manifest.json",
