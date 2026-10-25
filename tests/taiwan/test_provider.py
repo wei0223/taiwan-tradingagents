@@ -170,11 +170,10 @@ class TaiwanProviderTests(unittest.TestCase):
         early = p.snapshot("2330", "2023-01-01", "2024-05-14")
         self.assertEqual(len(early["quarterly_financials"]), 2)
         late = p.snapshot("2330", "2023-01-01", "2024-05-15")["quarterly_financials"][-1]
-        self.assertAlmostEqual(late["eps_qoq_pct"], 100 / 3)
-        self.assertEqual(late["eps_yoy_pct"], 100)
-        self.assertEqual(late["gross_margin_pct"], 50)
-        self.assertEqual(late["operating_margin_pct"], 30)
-        self.assertEqual(late["net_margin_pct"], 20)
+        # An announcement date proves availability, not per-field quarter/dilution basis.
+        for key in ("eps_qoq_pct", "eps_yoy_pct", "gross_margin_pct", "operating_margin_pct", "net_margin_pct"):
+            self.assertIsNone(late[key])
+        self.assertEqual(late["status"], "unavailable_unverified_field_periods")
 
     def test_no_quarter_skipping_and_no_zero_base_growth(self):
         self.assertIsNone(growth(2, 0))

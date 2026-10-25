@@ -64,7 +64,8 @@ class Sources:
             PRICE: [{'date': str(date(2024, 1, 1) + timedelta(days=i)), 'open': 100 + i,
                      'max': 102 + i, 'min': 99 + i, 'close': 101 + i, 'Trading_Volume': 1000}
                     for i in range(140)],
-            FINANCIAL: [{'date': '2024-03-31', 'type': 'EPS', 'value': 2}],
+            FINANCIAL: [{'date': '2024-03-31', 'type': 'EPS', 'value': 2},
+                        {'date': '2024-03-31', 'type': 'Revenue', 'value': 200}],
             REVENUE: [{'date': '2024-05-01', 'revenue_year': 2024, 'revenue_month': 4, 'revenue': 100}],
             VALUATION: [{'date': '2024-05-19', 'PER': 20, 'PBR': 3, 'dividend_yield': 2}],
             CASHFLOW: [{'date': '2024-03-31', 'type': key, 'value': value}
@@ -127,7 +128,11 @@ def make_provider(sources=None, as_of='2024-05-20'):
     client = FinMindClient(sources, lambda: NOW)
     resolver = MopsPublicationResolver('2024-01-01', as_of, MopsAnnouncementClient(sources, lambda: NOW))
     calendar = OfficialCalendarProvider(sources, lambda: NOW)
-    return ExtendedTaiwanProvider(client, resolver, calendar), sources
+    from tests.taiwan.period_fixtures import synthetic_review
+
+    return ExtendedTaiwanProvider(client, resolver, calendar, financial_period_review=
+                                 lambda stock, cutoff: synthetic_review(stock, sources.fixtures.get(FINANCIAL, []),
+                                                                        sources.fixtures.get(CASHFLOW, []))), sources
 
 
 def finished_run(snapshot, root, verdict='supports_bull', evidence_path=''):

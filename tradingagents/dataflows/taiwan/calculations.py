@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from datetime import date
 
 
@@ -74,36 +75,58 @@ def revenue_metrics(records):
     return output
 
 
-def financial_metrics(records):
+def financial_metrics(records, review=None, cutoff=None, stock_id=None):
+    """Only reviewed per-field quarters feed ratios; dates alone certify nothing."""
+    from .periods import resolve
+
+    stock_id = stock_id or (review or {}).get("stock_id")
+    cutoff = cutoff or max((r.get("retrieved_at", r["period"]) for r in records), default="1900-01-01")
+    resolved = resolve(review, stock_id, cutoff)
     quarters = {}
     for record in records:
-        # Only quarter-end observations are accepted; avoid arbitrary monthly / YTD dates.
         parsed = date.fromisoformat(record["period"])
-        ends = {3: 31, 6: 30, 9: 30, 12: 31}
-        if ends.get(parsed.month) != parsed.day:
-            continue
-        key = parsed.year * 4 + (parsed.month // 3 - 1)
-        quarter = quarters.setdefault(key, {"period": record["period"], "values": {}})
-        quarter["values"].update(record["values"])
+        if {3: 31, 6: 30, 9: 30, 12: 31}.get(parsed.month) == parsed.day:
+            quarters.setdefault(record["period"], {})
+    for observation in resolved["rows"]:
+        if observation["field"] not in {"CashFlowsFromOperatingActivities", "PropertyAndPlantAndEquipment"}:
+            quarters.setdefault(observation["period_end"], {})[observation["field"]] = observation
+
+    def same_basis(a, b):
+        return bool(a and b) and all(a[k] == b[k] for k in
+                                    ("period_start", "period_end", "scope", "version_set"))
+
+    def ratio(values, numerator):
+        a, b = values.get(numerator), values.get("Revenue")
+        return a["value"] / b["value"] * 100 if same_basis(a, b) and b["value"] > 0 else None
+
     output = []
-    for key, quarter in sorted(quarters.items()):
-        values = quarter["values"]
-        revenue = values.get("Revenue")
-        eps = values.get("EPS")
-        previous, year_ago = quarters.get(key - 1), quarters.get(key - 4)
+    for end, values in sorted(quarters.items()):
+        parsed = date.fromisoformat(end)
+        key = parsed.year * 4 + parsed.month // 3 - 1
+        def past_eps(offset, key=key, values=values):
+            index = key - offset
+            month = (index % 4 + 1) * 3
+            day = date(index // 4, month, calendar.monthrange(index // 4, month)[1]).isoformat()
+            previous = quarters.get(day, {}).get("DilutedEPS")
+            current = values.get("DilutedEPS")
+            return previous["value"] if current and previous and all(
+                current[k] == previous[k] for k in ("scope", "unit", "version_set")) else None
+        eps = values.get("DilutedEPS", {}).get("value")
         output.append({
-            "period": quarter["period"], "eps_twd": eps,
-            "eps_qoq_pct": growth(eps, previous["values"].get("EPS") if previous else None),
-            "eps_yoy_pct": growth(eps, year_ago["values"].get("EPS") if year_ago else None),
-            "gross_margin_pct": values.get("GrossProfit") / revenue * 100
-            if revenue and revenue > 0 and "GrossProfit" in values else None,
-            "operating_margin_pct": values.get("OperatingIncome") / revenue * 100
-            if revenue and revenue > 0 and "OperatingIncome" in values else None,
-            "net_margin_pct": values.get("IncomeAfterTaxes") / revenue * 100
-            if revenue and revenue > 0 and "IncomeAfterTaxes" in values else None,
-            "input_periods": [quarter["period"]] + ([previous["period"]] if previous else [])
-            + ([year_ago["period"]] if year_ago else []),
-            "basis": "FinMind single-quarter fields; no YTD differencing or EPS aggregation",
+            "period": end, "period_start": date(parsed.year, parsed.month - 2, 1).isoformat(),
+            "period_end": end, "scope": "consolidated", "eps_twd": eps,
+            "eps_basis": "single_quarter_diluted" if eps is not None else "unavailable",
+            "basic_eps_twd": values.get("BasicEPS", {}).get("value"),
+            "eps_qoq_pct": growth(eps, past_eps(1)), "eps_yoy_pct": growth(eps, past_eps(4)),
+            "revenue_twd": values.get("Revenue", {}).get("value"),
+            "gross_margin_pct": ratio(values, "GrossProfit"),
+            "operating_margin_pct": ratio(values, "OperatingIncome"),
+            "net_margin_pct": ratio(values, "IncomeAfterTaxes"),
+            "parent_net_margin_pct": ratio(values, "EquityAttributableToOwnersOfParent"),
+            "input_periods": sorted({r["period_end"] for r in resolved["rows"]}),
+            "field_periods": values,
+            "status": "partial" if values else "unavailable_unverified_field_periods",
+            "basis": "source_reviewed_single_quarter_fields_only; unknown vendor periods excluded",
         })
     return output
 

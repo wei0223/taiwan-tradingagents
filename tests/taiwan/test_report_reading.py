@@ -144,8 +144,9 @@ class ReadingTests(unittest.TestCase):
             root = Path(directory)
             self.assertEqual((root / "documents" / (doc["sha256"] + ".pdf")).read_bytes(), raw)
             self.assertEqual(
-                json.loads((root / "snapshot.json").read_text(encoding="utf-8")), original
+                json.loads((root / "source-snapshot.json").read_text(encoding="utf-8")), original
             )
+            self.assertTrue(json.loads((root / "period-conversion.json").read_text(encoding="utf-8"))["raw_values_unchanged"])
 
     def test_editorial_format_cannot_change_financial_axes(self):
         before, _ = self.render({"fundamental": ["Legacy"]}, packet())

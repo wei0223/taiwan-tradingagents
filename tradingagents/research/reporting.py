@@ -77,6 +77,16 @@ def package(
         if ctx["mode"] != "retrospective_diagnostic":
             verify_receipt_times(snapshot, timestamp(ctx["cutoff_at"]))
             verify_receipt_times(review_input or {}, timestamp(ctx["cutoff_at"]))
+    if release_path is not None and specification:
+        from .publication import read_release
+
+        if fingerprint(specification) != read_release(release_path)["specification_sha256"]:
+            raise ValueError("Changed model requires a separate versioned forecast release")
+    from .financial_periods import audit as audit_periods, prepare as prepare_periods
+
+    source_snapshot = copy.deepcopy(snapshot)
+    snapshot = prepare_periods(snapshot, review_input, extension_input)
+    period_audit = audit_periods(source_snapshot, snapshot)
     bundle = build_bundle(snapshot)
     audit = source_audit(snapshot)
     if audit["status"] != "passed":
@@ -169,6 +179,10 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    result["financial_period_conversion"] = period_audit
+    from .financial_periods import render_section
+
+    period_section = render_section(snapshot, period_audit, table)
     registry_section = ""
     if bool(official_source_store) != bool(official_source_snapshot):
         raise ValueError("Official source store and snapshot are required together")
@@ -604,6 +618,7 @@ def package(
         + "</style></head><body><main>"
         + introduction(stock, as_of, result["generated_at"], dynamics.get("latest_session"))
         + reading_gap
+        + period_section
         + publishing_section
         + estimate_section
         + dashboard
@@ -631,6 +646,8 @@ def package(
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(content)
     write_json(output / "snapshot.json", snapshot)
+    write_json(output / "source-snapshot.json", source_snapshot)
+    write_json(output / "period-conversion.json", period_audit)
     write_json(output / "analysts.json", analyst_prose or {})
     write_json(output / "reading-review.json", result["reading_review"])
     write_json(output / "review.json", reviewed)

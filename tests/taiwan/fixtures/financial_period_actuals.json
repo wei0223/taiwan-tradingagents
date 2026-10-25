@@ -1,0 +1,86 @@
+{
+  "2330": {
+    "q1_revenue_twd": 1134103440000.0,
+    "q2_revenue_twd": 1270380250000.0,
+    "h1_revenue_twd": 2404483690000,
+    "q1_cfo_twd": 698976265000,
+    "h1_cfo_twd": 1482341242000,
+    "q2_cfo_twd": 783364977000,
+    "q2_gross_profit_twd": 860310695000.0,
+    "q2_operating_profit_twd": 766602651000.0,
+    "q2_parent_profit_twd": 706561938000,
+    "q2_diluted_eps_twd": 27.25,
+    "official_provenance": {
+      "q1": {
+        "source_url": "https://doc.twse.com.tw/pdf/202601_2330_AIA_20261015_213432.pdf",
+        "sha256": "67409fbdf836a5ae703f36fa37efe1aa03870ff32fab80fc18db16f3d2080061",
+        "captured_at": "2026-10-15T13:34:34.929655+00:00",
+        "published_at": "2026-05-15T14:43:22+08:00"
+      },
+      "q2": {
+        "source_url": "https://doc.twse.com.tw/pdf/202602_2330_AIA_20261015_213444.pdf",
+        "sha256": "130a10e725e3a46a4a60645d5a5359662b8f97ee6772c852cc71cfc0a6643394",
+        "captured_at": "2026-10-15T13:34:46.498246+00:00",
+        "published_at": "2026-08-14T14:00:15+08:00"
+      }
+    },
+    "review_locator": "Q2 official PDF p.5 income; p.36 EPS note; 2026 Q2 column",
+    "fixture_use": "Real reviewed transcriptions; synthetic in-memory originals in unit tests. Real PDF bytes verified separately in integration acceptance."
+  },
+  "3017": {
+    "q1_revenue_twd": 49037946000.0,
+    "q2_revenue_twd": 49120964000.0,
+    "h1_revenue_twd": 98158910000,
+    "q1_cfo_twd": 13673650000,
+    "h1_cfo_twd": 26290591000,
+    "q2_cfo_twd": 12616941000,
+    "q2_gross_profit_twd": 15998698000.0,
+    "q2_operating_profit_twd": 13477619000.0,
+    "q2_parent_profit_twd": 9567347000,
+    "q2_diluted_eps_twd": 23.92,
+    "official_provenance": {
+      "q1": {
+        "source_url": "https://doc.twse.com.tw/pdf/202601_3017_AI1_20261015_213448.pdf",
+        "sha256": "1089d62f88c93a7954ce4a7f60a94578c289cf38edf70b428ee704578a4d5086",
+        "captured_at": "2026-10-15T13:34:48.793472+00:00",
+        "published_at": "2026-05-14T14:25:01+08:00"
+      },
+      "q2": {
+        "source_url": "https://doc.twse.com.tw/pdf/202602_3017_AI1_20261015_213451.pdf",
+        "sha256": "418df6e7296a62f0e324fa71ba4325923dc7eba9b08b78250d8f98903f639746",
+        "captured_at": "2026-10-15T13:34:51.970074+00:00",
+        "published_at": "2026-08-12T16:00:26+08:00"
+      }
+    },
+    "review_locator": "Q2 official PDF p.7 income; p.40 EPS note; 2026 Q2 column",
+    "fixture_use": "Real reviewed transcriptions; synthetic in-memory originals in unit tests. Real PDF bytes verified separately in integration acceptance."
+  },
+  "3231": {
+    "q1_revenue_twd": 846303026000.0,
+    "q2_revenue_twd": 895442616000.0,
+    "h1_revenue_twd": 1741745642000,
+    "q1_cfo_twd": -140605527000,
+    "h1_cfo_twd": -251356473000,
+    "q2_cfo_twd": -110750946000,
+    "q2_gross_profit_twd": 50663629000.0,
+    "q2_operating_profit_twd": 33447284000.0,
+    "q2_parent_profit_twd": 14827483000,
+    "q2_diluted_eps_twd": 4.36,
+    "official_provenance": {
+      "q1": {
+        "source_url": "https://doc.twse.com.tw/pdf/202601_3231_AI1_20261015_213732.pdf",
+        "sha256": "2c40b14002051add2a33d42a76d7ef4d56dd73e1fe9e7c60942f45c253701449",
+        "captured_at": "2026-10-15T13:37:37.658019+00:00",
+        "published_at": "2026-05-13T15:59:40+08:00"
+      },
+      "q2": {
+        "source_url": "https://doc.twse.com.tw/pdf/202602_3231_AI1_20261015_213739.pdf",
+        "sha256": "b9dd6c29ec1df7deefaf0d15e88080c2fb15e9ec99ff711a47c7efd074b74f85",
+        "captured_at": "2026-10-15T13:37:43.666715+00:00",
+        "published_at": "2026-08-11T08:44:59+08:00"
+      }
+    },
+    "review_locator": "Q2 official PDF p.5 income; p.38 EPS note; 2026 Q2 column",
+    "fixture_use": "Real reviewed transcriptions; synthetic in-memory originals in unit tests. Real PDF bytes verified separately in integration acceptance."
+  }
+}

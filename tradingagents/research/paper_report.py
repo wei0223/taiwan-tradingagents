@@ -174,6 +174,29 @@ def render_pdf(directory, font_path):
                   table(["檢查", "結果"], list(publishing["gates"].items()), [130 * mm, 40 * mm]),
                   p("當前交易結論 BLOCKED；下文保留歷史觀察，R僅情境測量。" if not market["current_trade_conclusion_allowed"] else "當期行情通過時效檢查；仍須個別訊號及成本驗證。", "small"),
                   p("前瞻估值未完成的原因與每季假設狀態，見同包 publishing-quality.json；條件EPS不冒充已驗證分母。", "small")]
+    conversion = data.get("financial_period_conversion")
+    if conversion:
+        snapshot = json.loads((root / "snapshot.json").read_text(encoding="utf-8"))
+        metrics = [m for m in snapshot.get("quarterly_financials", []) if m.get("eps_twd") is not None]
+        recent_metrics = metrics[-2:]
+        def display(value):
+            return f"{value:.2f}" if value is not None else "不可用"
+        story += [p("財報期間修正", "h2"),
+                  p("僅使用原件已核對的單季金額與稀釋EPS；6/30日期不代表單季。原供應商金額、封存預測與發布時間保持不變。", "small"),
+                  table(["期間", "毛利率%", "營益率%", "淨利率%", "稀釋EPS"],
+                        [[m["period"], *[display(m.get(k)) for k in ("gross_margin_pct", "operating_margin_pct", "net_margin_pct", "eps_twd")]]
+                         for m in recent_metrics], [38*mm,33*mm,33*mm,33*mm,33*mm]),
+                  p("完整舊值／修正值及來源版本見 period-conversion.json。累計EPS、加權股數與期末餘額不差分；未核對版本的單季值與成長率維持不可用。", "small")]
+        cash = [r for r in snapshot.get("extended_research", {}).get("cashflow", [])
+                if r.get("operating_twd_as_reported") is not None][-2:]
+        if cash:
+            story += [p("同版本單季現金轉換", "h3"),
+                      table(["期間", "CFO（億元）", "CFO／營收", "CFO／歸母", "FCF（億元）"],
+                            [[r["period"], display(r["operating_twd_as_reported"] / 1e8),
+                              display(r["cfo_to_revenue"]), display(r["cfo_to_parent_profit"]),
+                              "不可用" if r["operating_less_ppe_twd_as_reported"] is None else display(r["operating_less_ppe_twd_as_reported"] / 1e8)] for r in cash],
+                            [38*mm,33*mm,33*mm,33*mm,33*mm]),
+                      p("單季現金資本支出未核對時，FCF不可用。此比率不作跨產業排名；後文累計來源表僅按原期間閱讀。", "small")]
     estimate = data.get("forward_estimate")
     if estimate:
         scenario_labels = {"bear": "保守假設", "base": "基準假設（非機率最可能）", "bull": "樂觀假設"}

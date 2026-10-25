@@ -147,7 +147,15 @@ def build_bundle(snapshot):
         for key in ("revenue_twd", "yoy_pct"):
             add(f"revenue.{metric['period']}.{key}", metric[key], "percent" if key == "yoy_pct" else "TWD",
                 REVENUE, subset)
-    for metric in financial_metrics(records[FINANCIAL])[-12:]:
+    period_metrics = financial_metrics(records[FINANCIAL], snapshot.get("financial_period_review"),
+                                       as_of, stock_id)
+    latest_financial = period_metrics[-1] if period_metrics else {}
+    coverage[FINANCIAL]["calculation_status"] = (
+        "reviewed_single_quarter" if latest_financial.get("eps_twd") is not None
+        and latest_financial.get("revenue_twd") is not None
+        else "unavailable_unverified_field_periods")
+    coverage[FINANCIAL]["latest_calculation_period"] = latest_financial.get("period")
+    for metric in period_metrics[-12:]:
         subset = [r for r in records[FINANCIAL] if r["period"] in metric["input_periods"]]
         for key in ("eps_twd", "eps_qoq_pct", "eps_yoy_pct", "gross_margin_pct",
                     "operating_margin_pct", "net_margin_pct"):
@@ -161,13 +169,39 @@ def build_bundle(snapshot):
     from tradingagents.dataflows.taiwan.extensions import add_extended_evidence
 
     extended_missing = add_extended_evidence(snapshot, add, coverage)
+    # Corrected amounts originate in reviewed official observations, not the vendor
+    # records that merely supplied a quarter-end label. Keep that lineage explicit.
+    if snapshot.get("financial_period_review"):
+        from tradingagents.dataflows.taiwan.periods import resolve
+
+        approved = resolve(snapshot["financial_period_review"], stock_id, as_of)["rows"]
+        docs = snapshot["financial_period_review"]["documents"]
+        refs = {key for row in approved for key in row["document_ids"]}
+        lineage = {
+            "sources": sorted({docs[k]["source_url"] for k in refs}),
+            "publication_dates": sorted({docs[k]["published_at"] for k in refs if docs[k].get("published_at")}),
+            "retrieved_at": sorted({docs[k]["captured_at"] for k in refs}),
+            "publication_sources": ["source_reviewed_financial_originals"],
+            "publication_evidence_sha256": sorted({docs[k]["sha256"] for k in refs}),
+            "publication_document_urls": sorted({docs[k]["source_url"] for k in refs}),
+            "calculation_policy": "reviewed_single_quarter_only_v1",
+            "financial_period_observations": approved,
+        }
+        for item in evidence.values():
+            if item["path"].startswith(("financial.", "cashflow.")) and item["value"] is not None:
+                item.update(lineage)
+                item["data_start"] = min((r["period_start"] for r in approved), default=None)
+                item["data_end"] = max((r["period_end"] for r in approved), default=None)
+                item["input_rows"] = len(approved)
+                item["value_available_dates"] = sorted({docs[k]["captured_at"][:10] for k in refs})
     missing = [name for name, result in coverage.items() if result["status"] != "ok"]
     bundle = {
         "schema_version": 1, "stock_id": stock_id, "exchange": instrument["exchange"], "as_of": as_of,
         "data_mode": snapshot.get("data_mode", "provider_snapshot"),
         "snapshot_sha256": fingerprint(snapshot), "evidence": evidence, "coverage": coverage,
         "requires_insufficient_data": bool(not prices or PRICE in missing or FINANCIAL in missing
-                                            or REVENUE in missing or extended_missing),
+                                            or REVENUE in missing or extended_missing
+                                            or coverage[FINANCIAL]["calculation_status"] != "reviewed_single_quarter"),
         "limitations": [*[item for item in snapshot.get("limitations", []) if not item.startswith("No LLM analysis")],
                         *institutions["warnings"],
                         "No broker orders or portfolio simulation",

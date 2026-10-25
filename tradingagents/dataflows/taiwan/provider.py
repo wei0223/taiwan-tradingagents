@@ -121,11 +121,13 @@ class FinMindClient:
 
 
 class TaiwanMarketDataProvider:
-    def __init__(self, client: FinMindClient | None = None, publication_resolver=None):
+    def __init__(self, client: FinMindClient | None = None, publication_resolver=None,
+                 financial_period_review=None):
         self.client = client or FinMindClient()
         # A verified archive/MOPS adapter can supply publication evidence. FinMind's
         # date/create_time fields are deliberately never treated as publication.
         self.publication_resolver = publication_resolver
+        self.financial_period_review = financial_period_review
 
     def resolve_symbol(self, symbol: str) -> Instrument:
         match = re.fullmatch(r"([0-9]{4,6})(\.TW|\.TWO)?", symbol.strip().upper())
@@ -223,6 +225,10 @@ class TaiwanMarketDataProvider:
                 }
                 if proof:
                     record.update(publication_evidence=proof, available_at=available_at)
+                if dataset == FINANCIAL:
+                    from .periods import unknown_fields
+
+                    record["field_periods"] = unknown_fields(record)
                 result.records.append(record)
             except (KeyError, TypeError, ValueError, OverflowError):
                 # Any malformed/duplicate row makes the dataset unavailable. Calculations
@@ -288,7 +294,9 @@ class TaiwanMarketDataProvider:
             "datasets": datasets,
             "technical": technical(prices),
             "monthly_revenue": revenue_metrics(datasets[REVENUE]["records"]),
-            "quarterly_financials": financial_metrics(datasets[FINANCIAL]["records"]),
+            "quarterly_financials": financial_metrics(datasets[FINANCIAL]["records"], cutoff=as_of,
+                                                       stock_id=instrument.stock_id),
+            "financial_period_policy": "reviewed_single_quarter_only_v1",
             "institutions": institutional_metrics(datasets[INSTITUTIONS]["records"], prices,
                                                   instrument.exchange),
             "limitations": ["Current identity is not historical listing membership",
@@ -302,4 +310,10 @@ class TaiwanMarketDataProvider:
                 "MOPS proves announcement timestamps, not original FinMind values; "
                 "new numeric vintages cannot be backdated before capture"
             )
+        if self.financial_period_review is not None:
+            from .periods import refresh_snapshot
+
+            selected = (self.financial_period_review(instrument.stock_id, as_of)
+                        if callable(self.financial_period_review) else self.financial_period_review)
+            snapshot = refresh_snapshot(snapshot, selected)
         return snapshot

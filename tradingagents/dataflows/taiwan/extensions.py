@@ -105,8 +105,9 @@ def validate_record(dataset, record, as_of, stock_id):
 
 
 class ExtendedTaiwanProvider(TaiwanMarketDataProvider):
-    def __init__(self, client=None, publication_resolver=None, calendar_provider=None, news_days=3):
-        super().__init__(client, publication_resolver)
+    def __init__(self, client=None, publication_resolver=None, calendar_provider=None, news_days=3,
+                 financial_period_review=None):
+        super().__init__(client, publication_resolver, financial_period_review)
         if not isinstance(news_days, int) or isinstance(news_days, bool) or not 1 <= news_days <= 31:
             raise ValueError("news_days must be in 1..31")
         self.news_days = news_days
@@ -186,6 +187,10 @@ class ExtendedTaiwanProvider(TaiwanMarketDataProvider):
                           "values": values, "units": units}
                 if proof:
                     record["publication_evidence"] = proof
+                if dataset in (CASHFLOW, BALANCE):
+                    from .periods import unknown_fields
+
+                    record["field_periods"] = unknown_fields(record)
                 validate_record(dataset, record, as_of, stock_id)
                 result.records.append(record)
             except (ValueError, KeyError, TypeError, OverflowError):
@@ -276,18 +281,10 @@ def extension_metrics(snapshot):
     ratios = records.get(VALUATION, [])
     latest_ratio = ratios[-1]["values"] if ratios else {}
     pe_window = [row["values"]["reported_pe"] for row in ratios if row["values"]["reported_pe"] is not None]
-    cash = {}
-    for row in records.get(CASHFLOW, []):
-        cash.setdefault(row["period"], {}).update(row["values"])
-    flows = []
-    for period, values in sorted(cash.items()):
-        operating = values.get("CashFlowsFromOperatingActivities")
-        ppe = values.get("PropertyAndPlantAndEquipment")
-        flows.append({"period": period, "operating_twd_as_reported": operating,
-                      "ppe_cash_outflow_twd_as_reported": -ppe if ppe is not None and ppe <= 0 else None,
-                      "operating_less_ppe_twd_as_reported": operating + ppe
-                      if operating is not None and ppe is not None and ppe <= 0 else None,
-                      "basis": "source statement period; not certified single-quarter/TTM free cash flow"})
+    from .periods import cash_metrics
+
+    flows = cash_metrics(records.get(CASHFLOW, []), snapshot.get("financial_period_review"),
+                         snapshot["as_of"], snapshot["instrument"]["stock_id"])
     adjusted = records.get(ADJUSTED, [])
     adjusted_metrics = technical(adjusted) if adjusted else None
     if adjusted_metrics:
@@ -360,8 +357,10 @@ def add_extended_evidence(snapshot, add, coverage):
     for metric in metrics["cashflow"][-8:]:
         subset = [r for r in data[CASHFLOW]["records"] if r["period"] == metric["period"]]
         for key, value in sorted(metric.items()):
-            if key not in {"basis", "period"}:
-                add(f"cashflow.{metric['period']}.{key}", value, "TWD source statement period", CASHFLOW, subset)
+            if key in {"operating_twd_as_reported", "ppe_cash_outflow_twd_as_reported",
+                       "operating_less_ppe_twd_as_reported", "cfo_to_revenue", "cfo_to_parent_profit"}:
+                add(f"cashflow.{metric['period']}.{key}", value,
+                    "ratio" if key.startswith("cfo_to_") else "TWD reviewed single quarter", CASHFLOW, subset)
     adjusted = data[ADJUSTED]["records"]
     adjusted_metrics = metrics["adjusted_technical"]
     if adjusted_metrics:

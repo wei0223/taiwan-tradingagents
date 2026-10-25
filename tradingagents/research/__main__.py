@@ -47,6 +47,8 @@ def main(argv=None, provider=None, material_client=None):
     prepare.add_argument("--news-days", type=int, default=3)
     prepare.add_argument("--material-events", action="store_true", help="Capture recent all-category official announcements; originals still require review")
     prepare.add_argument("--archive-dir", type=Path, help="Persist immutable captured versions")
+    prepare.add_argument("--financial-period-review-dir", type=Path,
+                         help="Optional stock.json reviewed period ledgers; missing company reviews stay unavailable")
     imported = commands.add_parser("from-snapshot", help="Create a run from an already saved snapshot")
     imported.add_argument("--snapshot", type=Path, required=True)
     for name in ("from-snapshot", "status", "register-agent", "submit", "stop", "run"):
@@ -251,6 +253,12 @@ def main(argv=None, provider=None, material_client=None):
             for symbol in symbols:
                 try:
                     snapshot = provider.snapshot(symbol, args.start, args.as_of)
+                    if args.financial_period_review_dir:
+                        from tradingagents.dataflows.taiwan.periods import refresh_snapshot
+
+                        reviewed_file = args.financial_period_review_dir / (snapshot["instrument"]["stock_id"] + ".json")
+                        if reviewed_file.is_file():
+                            snapshot = refresh_snapshot(snapshot, load_json(reviewed_file))
                     if args.material_events:
                         from datetime import date, timedelta
 
