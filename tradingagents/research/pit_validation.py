@@ -22,7 +22,13 @@ def metrics(pairs):
             "forecast_hit_rate": None, "independent_samples_proven": False}
 
 
-def availability(row):
+def availability(row, evaluated_at=None):
+    if row.get("historical_version_proof"):
+        from .vintage import official_binding
+
+        if evaluated_at is None:
+            raise ValueError("Official historical proof needs an evaluation time")
+        return timestamp(official_binding(row, evaluated_at)["available_at"])
     captured = timestamp(row["captured_at"])
     published = row.get("published_at")
     if published:
@@ -33,7 +39,7 @@ def availability(row):
     raise ValueError("Unknown publication time requires verified public capture; never invent publication dates")
 
 
-def known(rows, cutoff):
+def known(rows, cutoff, evaluated_at=None):
     groups = {}
     for row in rows:
         if not row.get("source_sha256") or not row.get("revision_id"):
@@ -43,7 +49,12 @@ def known(rows, cutoff):
                 or finite(row["raw"].get("revenue")) != finite(row["value"])
                 or f"{int(row['raw']['revenue_year']):04d}-{int(row['raw']['revenue_month']):02d}" != row["period"]):
             raise ValueError("PIT numeric value does not match its archived raw row")
-        if availability(row) > timestamp(cutoff):
+        if row.get("historical_version_proof"):
+            from .vintage import knowledge
+
+            if not knowledge(row, cutoff, evaluated_at)["eligible"]:
+                continue
+        if availability(row, evaluated_at) > timestamp(cutoff):
             continue
         period = month_index(row["period"])
         if period >= month_index(cutoff[:7]):
@@ -51,8 +62,8 @@ def known(rows, cutoff):
         groups.setdefault(period, []).append(row)
     selected = {}
     for period, candidates in groups.items():
-        last = max(availability(r) for r in candidates)
-        latest = [r for r in candidates if availability(r) == last]
+        last = max(availability(r, evaluated_at) for r in candidates)
+        latest = [r for r in candidates if availability(r, evaluated_at) == last]
         if len({fingerprint(r) for r in latest}) != 1:
             raise ValueError("Ambiguous selected numeric version")
         selected[period] = latest[0]
@@ -79,7 +90,7 @@ def replay(rows, outcomes, folds, plan, evaluated_at):
                 or (previous_end and timestamp(fold["test_start"]) <= timestamp(previous_end))):
             raise ValueError("Training/test overlap or unordered folds")
         previous_end = fold["test_end"]
-        training = known(rows, fold["train_end"])
+        training = known(rows, fold["train_end"], evaluated_at)
         train_values = {k: r["value"] for k, r in training.items()}
         train_errors = {m: [] for m in METHODS}
         for origin in sorted(training):
@@ -99,7 +110,7 @@ def replay(rows, outcomes, folds, plan, evaluated_at):
             cutoff, target = origin["as_of"], origin["target"]
             if not timestamp(fold["test_start"]) <= timestamp(cutoff) <= timestamp(fold["test_end"]):
                 raise ValueError("Origin outside fold")
-            available = known(rows, cutoff)
+            available = known(rows, cutoff, evaluated_at)
             if len(available) < 24:
                 pending.append({"origin": cutoff, "target": target,
                                 "reason": "historical_input_vintages_missing", "known_months": len(available)})

@@ -17,6 +17,11 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None, resolution_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    numeric_audit = commands.add_parser("audit-original-values", help="Verify quoted official values and keep unresolved denominator scope")
+    numeric_audit.add_argument("--research", type=Path, required=True)
+    numeric_audit.add_argument("--review-input", type=Path, required=True)
+    numeric_audit.add_argument("--transcriptions", type=Path, required=True)
+    numeric_audit.add_argument("--output-dir", type=Path, required=True)
     resolve_events = commands.add_parser("resolve-events", help="Append bounded official-source repair attempts; never waive numeric review")
     resolve_events.add_argument("--research", type=Path, required=True)
     resolve_events.add_argument("--review-input", type=Path, required=True)
@@ -137,6 +142,23 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "audit-original-values":
+            from datetime import UTC, datetime
+
+            from .original_review import audit as audit_values
+            from .resolution import index_rows
+
+            research, reviewed = load_json(args.research), load_json(args.review_input)
+            work = research["v6_review"]["resolution_queue"]
+            if work["stock_id"] != reviewed["stock_id"] or args.output_dir.exists():
+                raise ValueError("Company identity and new audit directory required")
+            docs = reviewed["documents"]
+            result = audit_values(work, index_rows(docs), docs, load_json(args.transcriptions), datetime.now(UTC).isoformat())
+            args.output_dir.mkdir(parents=True)
+            write_json(args.output_dir / "original-numeric-review.json", result)
+            print(json.dumps({"stock_id": work["stock_id"], "reviewed": result["numeric_reviews_completed"],
+                              "rejected": len(result["rejected"]), "forecasts_modified": False}))
+            return 1 if result["rejected"] else 0
         if args.command == "resolve-events":
             from datetime import UTC, datetime
 

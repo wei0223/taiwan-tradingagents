@@ -7,7 +7,9 @@ import json
 import os
 import re
 import shutil
+from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from tradingagents.research.bundle import fingerprint
 from tradingagents.research.scenarios import timestamp
@@ -16,6 +18,22 @@ from tradingagents.research.scenarios import timestamp
 class SourceStore:
     def __init__(self, root):
         self.root = self.path(root)
+
+    def recent_refusals(self, now):
+        """Carry server restrictions across runs; do not reset them on restart."""
+        current, result = timestamp(now.isoformat()), {}
+        for path in (self.root / "receipts").glob("*.json"):
+            data = json.loads(path.read_text("utf8"))
+            if fingerprint(data) != path.stem:
+                raise ValueError("Receipt metadata changed")
+            if data.get("http_status") not in {403, 429} and data.get("status") != "source_rejected":
+                continue
+            captured = timestamp(data["captured_at"])
+            until = captured + timedelta(days=1)
+            if captured <= current < until:
+                host = urlsplit(data["source_url"]).netloc
+                result[host] = max(result.get(host, until.isoformat()), until.isoformat())
+        return result
 
     @staticmethod
     def path(value):

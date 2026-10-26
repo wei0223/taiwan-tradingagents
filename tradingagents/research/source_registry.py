@@ -176,6 +176,38 @@ def assess(store, snapshot_id, review_input=None):
     return result
 
 
+def monthly_vintages(store, snapshot_id):
+    """Export official observed values for later replays without backdating them."""
+    snapshot = store.read_snapshot(snapshot_id)
+    company = next(c for c in snapshot["plan"]["companies"] if c["stock_id"] == snapshot["stock_id"])
+    rows = []
+    for resource in snapshot["resources"]:
+        if resource["family"] != "monthly_revenue" or resource["status"] != "verified_current":
+            continue
+        period = resource["key"].removeprefix("revenue:")
+        year, month = map(int, period.split("-"))
+        receipt_id = resource["receipt_ids"][0]
+        doc = store.receipt(receipt_id)
+        row = {"COMPANY_ID": snapshot["stock_id"], "COMPANY_NAME": company["name"],
+               "AN_CODE": "F22", "SUBJECT": f"{year-1911}年{month}月營業收入", "HYPERLINK": doc["source_url"]}
+        verified = review_original(row, doc)
+        if not verified["content_verified"] or verified["numeric_observations"] != resource["data"]["observations"]:
+            raise ValueError("Monthly vintage differs from archived original")
+        observation = verified["numeric_observations"][0]
+        raw = {"stock_id": snapshot["stock_id"], "revenue_year": year,
+               "revenue_month": month, "revenue": observation["value"]}
+        rows.append({"stock_id": snapshot["stock_id"], "period": period, "value": raw["revenue"],
+            "raw": raw, "raw_kind": "normalized_from_verified_original_not_HTTP_body",
+            "source_sha256": fingerprint(raw), "source_document_sha256": doc["sha256"],
+            "source_url": doc["source_url"], "source_locator": observation["locator"],
+            "revision_id": "observed_current:"+doc["sha256"], "original_receipt_id": receipt_id,
+            "source_snapshot_id": snapshot_id, "published_at": None,
+            "captured_at": doc["captured_at"], "public_capture_verified": True,
+            "publication_time_status": "unknown_current_revision", "initial_publication_verified": False})
+    return {"stock_id": snapshot["stock_id"], "rows": rows,
+            "known_from_capture_only": True, "historic_initial_version_claimed": False}
+
+
 def refresh(plan, archive_dir, output_dir, transport=None, clock=None, reviews=None):
     today = (clock or (lambda: datetime.now(UTC)))().astimezone(TAIPEI).date()
     if plan.get("rolling_scope"):
@@ -197,6 +229,8 @@ def refresh(plan, archive_dir, output_dir, transport=None, clock=None, reviews=N
         resources = client.collect(company, plan)
         key = store.append(stock, plan, resources, client.clock().isoformat())
         result = assess(store, key, (reviews or {}).get(stock))
+        (target / (stock + "-monthly-vintages.json")).write_text(
+            json.dumps(monthly_vintages(store, key), ensure_ascii=False, indent=2), encoding="utf8")
         (target / (stock + ".json")).write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf8"
         )
@@ -213,6 +247,7 @@ def refresh(plan, archive_dir, output_dir, transport=None, clock=None, reviews=N
         "request_count": client.requests,
         "pdf_count": client.pdfs,
         "refused_hosts": sorted(client.refused),
+        "inherited_refusals_until": client.inherited_refusals,
         "llm_api_calls": False,
     }
     (target / "registry-run.json").write_text(

@@ -84,11 +84,15 @@ def historical_pe(price_rows, eps_rows, stock, cutoff):
     """
     from tradingagents.dataflows.taiwan.periods import _document, cutoff_time
 
+    from .vintage import knowledge
+
     def original_verified(row, boundary):
         try:
             doc = row["document"]
-            _document(doc, stock, cutoff_time(boundary))
+            _document(doc, stock, cutoff_time(cutoff))
+            availability = {**doc, **{k: row[k] for k in ("historical_version_proof", "object_id", "revision_id") if k in row}}
             return bool(row.get("reviewed_by") and row.get("locator")
+                        and knowledge(availability, boundary, cutoff)["eligible"]
                         and row["source_sha256"] == doc["sha256"]
                         and row["source_url"] == doc["source_url"])
         except (KeyError, ValueError, TypeError):
@@ -104,19 +108,18 @@ def historical_pe(price_rows, eps_rows, stock, cutoff):
                     and e.get("source_sha256") and e.get("source_url") and e.get("locator")
                     and e.get("original_bytes_verified") is True
                     and original_verified(e, boundary)
-                    and e.get("published_at") and timestamp(e["published_at"]) <= timestamp(boundary)
-                    and timestamp(e["captured_at"]) <= timestamp(boundary)]
+                    and e.get("published_at") and timestamp(e["published_at"]) <= timestamp(boundary)]
         by_period = {}
         for e in eligible:
             by_period.setdefault(e["period"], []).append(e)
         periods = sorted(by_period)[-4:]
         selected = [by_period[p][0] for p in periods if len(by_period[p]) == 1]
         indices = [int(e["period"][:4]) * 4 + int(e["period"][-1]) for e in selected]
-        reason = None
+        reasons = []
         if len(indices) != 4 or indices != list(range(indices[0], indices[0] + 4)):
-            reason = "four_consecutive_unambiguous_known_quarter_originals_missing"
+            reasons.append("four_consecutive_unambiguous_known_quarter_originals_missing")
         if not periods or price.get("expected_latest_reported_period") != periods[-1]:
-            reason = "latest_announced_earnings_period_not_verified"
+            reasons.append("latest_announced_earnings_period_not_verified")
         action = price.get("corporate_action_review", {})
         if not (price.get("source_sha256") and price.get("stock_id") == stock
                 and price.get("price_basis") == "unadjusted_TWD_per_common_share"
@@ -124,15 +127,17 @@ def historical_pe(price_rows, eps_rows, stock, cutoff):
                 and price.get("raw") and price["source_sha256"] == fingerprint(price["raw"])
                 and price["raw"].get("close") == price["close"]
                 and price["raw"].get("date") == price["date"]
-                and timestamp(price["captured_at"]) <= timestamp(boundary)):
-            reason = "contemporaneous_price_or_common_share_basis_unverified"
-        eps = sum(e["eps_twd"] for e in selected) if reason is None else None
+                and knowledge({**price, "public_capture_verified": True,
+                               "publication_time_status": "unknown_current_revision"}, boundary, cutoff)["eligible"]):
+            reasons.append("contemporaneous_price_or_common_share_basis_unverified")
+        eps = sum(e["eps_twd"] for e in selected) if not reasons else None
         rows.append({"date": price["date"], "price_twd": price["close"],
                      "price_source_sha256": price.get("source_sha256"), "information_boundary": boundary,
                      "quarters": selected, "eps_period_start": periods[0] if periods else None,
                      "eps_period_end": periods[-1] if periods else None, "ttm_eps": eps,
                      "pe": price["close"] / eps if eps and eps > 0 else None,
-                     "status": "VERIFIED" if reason is None else "SOURCE_UNAVAILABLE", "reason": reason})
+                     "status": "VERIFIED" if not reasons else "SOURCE_UNAVAILABLE", "reason": reasons[-1] if reasons else None,
+                     "exclusion_reasons": reasons})
     return {"rows": rows, "verified_points": sum(r["status"] == "VERIFIED" for r in rows),
             "fair_exit_multiple_established": False, "undervaluation_rank": None,
             "basis": "reported_quarter_diluted_eps_sum_not_statutory_annual_weighted_eps"}
@@ -186,6 +191,7 @@ def build(snapshot, result, extension, documents):
                "source_sha256": r.get("raw_sha256") or fingerprint(r["raw"]),
                "price_basis": "unadjusted_TWD_per_common_share"}
               for r in snapshot["datasets"]["TaiwanStockPrice"]["records"]]
+    prices = extension.get("valuation_price_originals", prices)
     pe = historical_pe(prices, eps, snapshot["instrument"]["stock_id"], cutoff)
     projection = plan.get("revenue_projection", {})
     if extension.get("historical_revenue_snapshot"):
@@ -247,12 +253,15 @@ def build(snapshot, result, extension, documents):
             "base_is_most_likely": False, "new_forecast_issued": False}
 
 
-def render(review, table):
+def render(review, table, historical=False):
     if review.get("status") == "unavailable_no_research_plan":
         return ""
     from html import escape
 
-    out = '<section id="v5-review"><h2>V5：證據、模型差異與驗證</h2>'
+    out = '<section id="v5-review"'+(' data-scope="historical"' if historical else '')+'><h2>'+(
+        'V5：歷史審查基準（非本輪處理狀態）' if historical else 'V5：證據、模型差異與驗證')+'</h2>'
+    if historical:
+        out += '<p>以下保留原始未去重、未完成原件數值審查時的基準清單；本輪缺件、P0與複核結果以後方原件驗收為準，不把舊計數當新增消息或當前模型狀態。</p>'
     out += ''.join('<p>' + escape(s) + '</p>' for s in review["summary"])
     events = review["events"]["events"]
     out += table(["官方事件／來源", "公布時點", "狀態", "模型影響／原因"],

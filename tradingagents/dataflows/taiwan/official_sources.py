@@ -45,7 +45,8 @@ class OfficialSources:
         self.clock = clock or (lambda: datetime.now(UTC))
         self.max_requests, self.max_pdfs = max_requests, max_pdfs
         self.requests = self.pdfs = 0
-        self.refused = set()
+        self.inherited_refusals = self.store.recent_refusals(self.clock())
+        self.refused = set(self.inherited_refusals)
         self.cache = {}
         self.receipt_log = []
 

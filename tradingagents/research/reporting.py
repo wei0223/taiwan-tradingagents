@@ -273,6 +273,8 @@ def package(
         estimate_section = render_estimate(result["forward_estimate"], table,
                                            result["v6_review"]["current_output_registry"])
     v6_section = render_v6(result["v6_review"], table)
+    if result["v6_review"].get("original_numeric_review"):
+        v5_section = render_v5(result["v5_review"], table, historical=True)
     dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
     if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
         decision["current_trade_conclusion_allowed"] = False
@@ -716,6 +718,8 @@ def package(
     write_json(output / "publishing-quality.json", publication)
     write_json(output / "v5-review.json", result["v5_review"])
     write_json(output / "v6-review.json", result["v6_review"])
+    if result["v6_review"].get("original_numeric_review"):
+        write_json(output / "original-numeric-review.json", result["v6_review"]["original_numeric_review"])
     if result["v6_review"].get("schema_version") == 6:
         write_json(output / "resolution-queue.json", result["v6_review"]["resolution_queue"])
         write_json(output / "current-output-registry.json", result["v6_review"]["current_output_registry"])
