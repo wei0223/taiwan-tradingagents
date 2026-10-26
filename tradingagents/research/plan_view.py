@@ -268,8 +268,7 @@ def sections(plan):
                     if quotient is not None
                     else "歸母橋不足，商數不可用。"
                 )
-                + "待補："
-                + "、".join(x["driver"] for x in item["blockers"]),
+                + ("待補：" + "、".join(x["driver"] for x in item["blockers"]) if item["blockers"] else "；無缺項，仍非官方實績"),
             )
         )
     if drows:
@@ -359,6 +358,14 @@ def sections(plan):
             ],
         )
     )
+    if plan.get("current_output_registry"):
+        current = plan["current_output_registry"]
+        legacy = {"未來四季與估值條件", "前瞻輸出分級與股數敏感度", "歷史比率持平的歸母例示"}
+        rows = [(heading, data) for heading, data in rows if heading not in legacy and "歷史比率" not in heading]
+        rows.append(("當前條件模型與正式資格", [
+            ("模型版本", current["model_version"]),
+            ("當前輸出", "四季條件EPS見首頁及current-output-registry.json；不是正式已驗證預測或股數實績。"),
+            ("歷史修訂紀錄（不是本次預測狀態）", "舊現股商數及缺項狀態只保留於extension.json，不與當前條件EPS並列。")]))
     return rows
 
 
@@ -375,6 +382,8 @@ def render(plan, table):
         + "</section>"
         for title, rows in sections(plan)
     )
+    if plan.get("current_output_registry"):
+        return result
     disclosure = plan.get("illustrative_profit_disclosure", {})
     detail = []
 

@@ -201,9 +201,13 @@ def build(spec, plan, quality, documents, stock):
     return result
 
 
-def render(model, table):
+def render(model, table, registry=None):
     if model.get("status") == "not_supplied":
         return ""
+    if registry:
+        from .output_registry import materialize
+
+        model = materialize(model, registry)
     esc = html.escape
     out = (
         '<section id="forward-estimate"><h2>四季 EPS 預估與條件估值</h2><p>'
@@ -218,6 +222,8 @@ def render(model, table):
         + "，未還原收盤 "
         + f"{model['price_twd']:.2f} 元。</p>"
     )
+    if registry:
+        out += '<p>當前條件模型 '+esc(registry["model_version"])+ '；run '+registry["calculation_run_id"][:16]+ '；snapshot '+registry["input_snapshot_id"][:16]+ '；source_as_of '+esc(registry["source_as_of"])+ '。<a href="current-output-registry.json">每個輸出值、單位與資格</a>。</p>'
     out += table(
         ["情境", "四季 EPS 和（元）", "Forward PE（條件）"],
         [
@@ -232,7 +238,7 @@ def render(model, table):
         ],
     )
     out += table(
-        ["季度／基準", "營收億", "毛利億", "營益億", "業外億", "歸母億", "稀釋股數百萬", "EPS元"],
+        ["季度／基準條件", "營收億", "毛利億", "營益億", "業外億", "歸母億", "稀釋股數百萬", "EPS元"],
         [
             [
                 c["period"],

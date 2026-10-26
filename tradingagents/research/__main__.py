@@ -14,9 +14,15 @@ from .bundle import build_bundle, check_dates, fingerprint, reject_secret
 from .debate import STAGES, load_json, load_run, register_agent, start_run, stop, submit, write_json
 
 
-def main(argv=None, provider=None, material_client=None):
+def main(argv=None, provider=None, material_client=None, resolution_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    resolve_events = commands.add_parser("resolve-events", help="Append bounded official-source repair attempts; never waive numeric review")
+    resolve_events.add_argument("--research", type=Path, required=True)
+    resolve_events.add_argument("--review-input", type=Path, required=True)
+    resolve_events.add_argument("--output-dir", type=Path, required=True)
+    resolve_events.add_argument("--live", action="store_true", help="Opt in to bounded public official captures, no token")
+    resolve_events.add_argument("--max-documents", type=int, default=1)
     refresh_market = commands.add_parser("refresh-market", help="Bounded public TWSE raw prices/institutions supplement; adjusted prices remain separately gated")
     refresh_market.add_argument("--snapshot", type=Path, required=True)
     refresh_market.add_argument("--output-dir", type=Path, required=True)
@@ -131,6 +137,28 @@ def main(argv=None, provider=None, material_client=None):
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "resolve-events":
+            from datetime import UTC, datetime
+
+            from tradingagents.dataflows.taiwan.originals import MopsOriginalClient
+
+            from .resolution import execute, index_rows as original_index_rows
+
+            if not 0 <= args.max_documents <= 10:
+                raise ValueError("Bounded capture budget must be 0 through 10")
+            research, reviewed = load_json(args.research), load_json(args.review_input)
+            work = research["v6_review"]["resolution_queue"]
+            if work["stock_id"] != reviewed["stock_id"]:
+                raise ValueError("Resolution company mismatch")
+            documents = reviewed.get("documents", {})
+            index_rows = original_index_rows(documents)
+            client = (resolution_client or MopsOriginalClient()) if args.live else None
+            repaired = execute(work, index_rows, documents, args.output_dir / "attempts", client,
+                               datetime.now(UTC).isoformat(), args.max_documents)
+            write_json(args.output_dir / "resolution-run.json", repaired)
+            print(json.dumps({"stock_id": work["stock_id"], "items": len(repaired["items"]),
+                              "numeric_impact_verified": False, "warnings_removed": False}))
+            return 0
         if args.command == "refresh-market":
             from tradingagents.dataflows.taiwan.current_market import CurrentMarketProvider
 

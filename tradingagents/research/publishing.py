@@ -374,7 +374,8 @@ def render(quality, table):
         + quality["full_valuation_status"]
         + "。供應商結構通過不代表官方公告完整。</p>"
     )
-    out += table(["驗收項目", "結果"], quality["gates"].items())
+    out += table(["驗收項目", "結果"], [("參數結構與具名審查（不代表校準或準確度）" if k == "forward_parameters_reviewed" else k, v)
+                                       for k, v in quality["gates"].items()])
     out += table(
         ["行情檢查", "結果"],
         [

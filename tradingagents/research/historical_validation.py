@@ -239,6 +239,10 @@ def short_horizon(
                 "exit_reason": reason,
                 "net_return": net,
                 "marked_close_max_drawdown": drawdown,
+                "maximum_adverse_bar_bound_net_return": min(
+                    0.0, min(bars[j]["low"] for j in range(entry, exit_idx+1))
+                    * (1-sell)/(price*(1+buy))-1),
+                "adverse_excursion_qualification": "conservative_daily_bar_bound_exit_bar_may_include_post_exit_low_not_exact_intraday_path",
                 "same_entry_horizon_hold_net_return": baseline,
                 "entry_price_capture_is_contemporary_not_historical": True,
                 "execution_verified": False,
