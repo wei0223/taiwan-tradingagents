@@ -89,11 +89,14 @@ def render(review, table):
     if not review:
         return ""
     rows = [[r["id"], r["target_document"], "；".join(r["missing_fields"]),
-             r["disposition_label"], r["finding"]] for r in review["items"]]
+             r["disposition_label"], r["finding"],
+             "可用：" + "；".join(r.get("alternative", {}).get("permitted_uses", r.get("permitted_uses", [])))
+             + "。排除：" + "；".join(r["excluded_uses"]),
+             "；".join(r["reopen_requirements"])] for r in review["items"]]
     return ('<section id="gap-closure"><h2>缺口結案審查</h2><p>工單結案不代表缺失數值已補齊。'
             '年度替代僅供同年度比較；歷史對應無法重建只適用本輪查證範圍，不宣稱永久不存在。'
             '目前已審查事實繼續使用，歷史績效仍逐筆檢驗版本資格。</p>'
-            + table(["工單", "所需文件", "仍缺欄位", "處置", "查證結論"], rows)
+            + table(["工單", "所需文件", "仍缺欄位", "處置", "查證結論", "用途限制", "重新開案條件"], rows)
             + '<p>審查時間：' + escape(review["reviewed_at"])
             + '；<a href="gap-closure-review.json">證據、排除用途與重新開案條件</a>。'
             '新資料持續封存；新證據須另建審查版本，原預測不變。</p></section>')

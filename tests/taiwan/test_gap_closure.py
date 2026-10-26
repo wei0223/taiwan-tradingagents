@@ -39,6 +39,13 @@ class GapClosureTests(unittest.TestCase):
         self.assertFalse(result['items'][0]['qualification_promoted'])
         self.assertFalse(result['items'][0]['original_missing_metric_available'])
         self.assertIn('缺口結案審查', render(result, lambda *_: 'table'))
+        def table(headers, rows):
+            self.assertIn('用途限制', headers)
+            self.assertIn('重新開案條件', headers)
+            self.assertIn('strict_historical_performance', rows[0][-2])
+            self.assertIn('official event/version record', rows[0][-1])
+            return 'table'
+        render(result, table)
 
     def test_refusal_alone_cannot_close(self):
         self.item['finding_code'] = '403'

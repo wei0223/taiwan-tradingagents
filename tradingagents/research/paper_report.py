@@ -704,6 +704,13 @@ def render_pdf(directory, font_path):
         if inventory:
             missing=', '.join(r["period"] for r in inventory["quarters"] if r["status"] != "verified_direct") or '無'
             story.append(p("直接季度稀釋EPS原件 "+str(inventory["verified_count"])+"/4；缺季："+missing+"。目前可重算與歷史版本可用性分開。", "small"))
+        closure = v6.get("gap_closure")
+        if closure:
+            story.append(p("缺口結案審查：工單結案不解除EPS、估值或歷史績效資格；年度替代不得填Q4或滾動TTM。", "h3"))
+            for item in closure["items"]:
+                story.append(p(item["id"] + "｜" + item["disposition_label"] + "｜" + item["target_document"], "small"))
+                story.append(p("用途限制：" + "；".join(item["excluded_uses"]), "small"))
+                story.append(p("重新開案條件：" + "；".join(item["reopen_requirements"]), "small"))
         if folds:
             story.append(table(["區段", "已知訓練月", "可算／待補起點", "狀態"],
                 [[r["fold"]["name"], r["input_training_months"], str(len(r["predictions"]))+" / "+str(len(r["pending"])), r["status"]] for r in folds],
