@@ -22,6 +22,17 @@ def metrics(pairs):
             "forecast_hit_rate": None, "independent_samples_proven": False}
 
 
+def availability(row):
+    captured = timestamp(row["captured_at"])
+    published = row.get("published_at")
+    if published:
+        return max(timestamp(published), captured)
+    if (row.get("public_capture_verified") is True
+            and row.get("publication_time_status") == "unknown_current_revision"):
+        return captured
+    raise ValueError("Unknown publication time requires verified public capture; never invent publication dates")
+
+
 def known(rows, cutoff):
     groups = {}
     for row in rows:
@@ -32,7 +43,7 @@ def known(rows, cutoff):
                 or finite(row["raw"].get("revenue")) != finite(row["value"])
                 or f"{int(row['raw']['revenue_year']):04d}-{int(row['raw']['revenue_month']):02d}" != row["period"]):
             raise ValueError("PIT numeric value does not match its archived raw row")
-        if max(timestamp(row["published_at"]), timestamp(row["captured_at"])) > timestamp(cutoff):
+        if availability(row) > timestamp(cutoff):
             continue
         period = month_index(row["period"])
         if period >= month_index(cutoff[:7]):
@@ -40,8 +51,8 @@ def known(rows, cutoff):
         groups.setdefault(period, []).append(row)
     selected = {}
     for period, candidates in groups.items():
-        last = max(max(timestamp(r["published_at"]), timestamp(r["captured_at"])) for r in candidates)
-        latest = [r for r in candidates if max(timestamp(r["published_at"]), timestamp(r["captured_at"])) == last]
+        last = max(availability(r) for r in candidates)
+        latest = [r for r in candidates if availability(r) == last]
         if len({fingerprint(r) for r in latest}) != 1:
             raise ValueError("Ambiguous selected numeric version")
         selected[period] = latest[0]
@@ -112,6 +123,7 @@ def replay(rows, outcomes, folds, plan, evaluated_at):
                        and r.get("vintage_kind") == "initial" and r.get("initial_publication_verified") is True
                        and r.get("official_source_reviewed") is True and r.get("source_locator")
                        and r.get("initial_publication_history_verified") is True
+                       and r.get("published_at")
                        and r.get("source_sha256") and r.get("revision_id")
                        and max(timestamp(r["published_at"]), timestamp(r["captured_at"])) <= timestamp(evaluated_at)
                        and timestamp(r["published_at"]) > timestamp(cutoff)]

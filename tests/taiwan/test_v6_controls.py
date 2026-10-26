@@ -228,6 +228,18 @@ class PITTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             pit_validation.known([r, {**r, "revision_id": "other"}], "2026-10-26")
 
+    def test_unknown_publication_never_invented_or_backdated(self):
+        r = vintage(2020, 1, "2026-10-25T00:00:00Z")
+        r.update(published_at=None, public_capture_verified=True, publication_time_status="unknown_current_revision")
+        self.assertEqual(pit_validation.known([r], "2021-01-01"), {})
+        self.assertEqual(len(pit_validation.known([r], "2026-10-26")), 1)
+
+    def test_unknown_publication_without_capture_proof_rejected(self):
+        r = vintage(2020, 1)
+        r["published_at"] = None
+        with self.assertRaises(ValueError):
+            pit_validation.known([r], "2026-10-26")
+
     def test_metrics_zero_actual_is_not_dropped_from_mae(self):
         r = pit_validation.metrics([{"prediction": 2, "actual": 0}])
         self.assertEqual(r["n"], 1)
