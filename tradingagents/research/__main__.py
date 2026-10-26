@@ -141,6 +141,7 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             from datetime import UTC, datetime
 
             from tradingagents.dataflows.taiwan.originals import MopsOriginalClient
+
             from .resolution import execute, index_rows as original_index_rows
 
             if not 0 <= args.max_documents <= 10:
