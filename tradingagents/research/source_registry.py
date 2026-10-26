@@ -172,6 +172,14 @@ def assess(store, snapshot_id, review_input=None):
         "llm_api_calls": False,
         "orders": False,
     }
+    if (review_input or {}).get("gap_closure"):
+        from .gap_closure import audit as audit_gaps
+
+        result["gap_closure"] = audit_gaps(review_input["gap_closure"], review_input["documents"],
+                                           datetime.now(UTC).isoformat(), stock)
+        result["historical_investigation_state"] = "selected_investigations_disposed_qualification_unchanged"
+        # The legacy pending flag describes absent proof across the whole source
+        # scope, not the work status of the individually closed investigations.
     result["assessment_sha256"] = fingerprint(result)
     return result
 

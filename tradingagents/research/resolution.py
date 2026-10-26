@@ -18,13 +18,17 @@ def index_rows(documents):
 
     from tradingagents.dataflows.taiwan.publications import MopsAnnouncementClient
 
-    rows = []
+    rows, seen = [], set()
     for doc in documents.values():
         if doc.get("source_url") == MopsAnnouncementClient.endpoint:
             raw = base64.b64decode(doc["content_base64"], validate=True)
             if hashlib.sha256(raw).hexdigest() != doc["sha256"]:
                 raise ValueError("Official index original changed")
-            rows.extend(json.loads(raw.decode("utf-8-sig")).get("data", []))
+            for row in json.loads(raw.decode("utf-8-sig")).get("data", []):
+                identity = fingerprint(row)
+                if identity not in seen:
+                    rows.append(row)
+                    seen.add(identity)
     return rows
 
 
