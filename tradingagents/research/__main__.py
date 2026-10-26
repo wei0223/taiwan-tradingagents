@@ -17,6 +17,10 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None, resolution_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    gap_audit = commands.add_parser("audit-gap-closure", help="Close scoped investigations without upgrading data eligibility")
+    gap_audit.add_argument("--ledger", type=Path, required=True)
+    gap_audit.add_argument("--review-input", type=Path, required=True)
+    gap_audit.add_argument("--output-dir", type=Path, required=True)
     numeric_audit = commands.add_parser("audit-original-values", help="Verify quoted official values and keep unresolved denominator scope")
     numeric_audit.add_argument("--research", type=Path, required=True)
     numeric_audit.add_argument("--review-input", type=Path, required=True)
@@ -142,6 +146,20 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "audit-gap-closure":
+            from datetime import UTC, datetime
+
+            from .gap_closure import audit as audit_gaps
+
+            if args.output_dir.exists():
+                raise ValueError("New gap audit directory required; previous reviews are immutable")
+            reviewed = load_json(args.review_input)
+            result = audit_gaps(load_json(args.ledger), reviewed["documents"],
+                                datetime.now(UTC).isoformat(), reviewed["stock_id"])
+            args.output_dir.mkdir(parents=True)
+            write_json(args.output_dir / "gap-closure-review.json", result)
+            print(json.dumps(result["counts"]))
+            return 0
         if args.command == "audit-original-values":
             from datetime import UTC, datetime
 

@@ -105,10 +105,16 @@ def build(snapshot, result, spec, documents):
 
         eps_inventory = inventory(result["stock_id"], spec["valuation_latest_reported"],
                                   spec.get("valuation_eps_originals", []), result["generated_at"])
+    closure = None
+    if spec.get("gap_closure"):
+        from .gap_closure import audit as audit_gaps
+
+        closure = audit_gaps(spec["gap_closure"], documents, result["generated_at"], result["stock_id"])
     return {"schema_version": 6, "status": "operational_controls_with_explicit_empirical_gaps",
             "resolution_queue": work, "layered_gates": gates(work, result["latest_market_gate"], cutoff),
             "parameters": validation, "current_output_registry": registry, "original_numeric_review": original_review,
             "pit_evaluation": pit, "debate_trigger": debate, "valuation_eps_inventory": eps_inventory,
+            "gap_closure": closure,
             "valuation_layers": {
                 "vendor_reported_history": {"status": "UNVERIFIED_DENOMINATOR", "source": "extension.json#valuation"},
                 "current_reviewed_quarter_sum_price_reference": {"ttm": estimate.get("ttm"), "pe": estimate.get("ttm_pe"),
@@ -129,6 +135,9 @@ def render(review, table):
 
     work, registry = review["resolution_queue"], review["current_output_registry"]
     out = '<section id="v6-review"><h2>V6：修復作業與當前模型狀態</h2>'
+    from .gap_closure import render as render_closure
+
+    out += render_closure(review.get("gap_closure"), table)
     out += '<p>以下數量分開計算公告、索引範圍及歷史版本缺口，不能合稱獨立重大訊息。取得原件不等於核對數值影響；沒有以清除警告解除 Gate。</p>'
     out += table(["項目", "狀態"], [[k, v] for k, v in review["layered_gates"].items() if k not in {"unresolved_P0", "explicit_user_waivers"}])
     out += table(["分類計數", "數量"], work["counts"].items())

@@ -718,6 +718,8 @@ def package(
     write_json(output / "publishing-quality.json", publication)
     write_json(output / "v5-review.json", result["v5_review"])
     write_json(output / "v6-review.json", result["v6_review"])
+    if result["v6_review"].get("gap_closure"):
+        write_json(output / "gap-closure-review.json", result["v6_review"]["gap_closure"])
     if result["v6_review"].get("original_numeric_review"):
         write_json(output / "original-numeric-review.json", result["v6_review"]["original_numeric_review"])
     if result["v6_review"].get("schema_version") == 6:
