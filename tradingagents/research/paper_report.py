@@ -660,7 +660,10 @@ def render_pdf(directory, font_path):
 
     v5 = data.get("v5_review", {})
     if v5.get("status") == "reviewed_with_explicit_gaps":
-        story += [p("V5：模型差異與驗證限制", "h2")]
+        historical = bool(data.get("v6_review", {}).get("original_numeric_review"))
+        story += [p("V5：歷史審查基準（非本輪處理狀態）" if historical else "V5：模型差異與驗證限制", "h2")]
+        if historical:
+            story.append(p("以下保留原始未去重／未複核時的清單。當前P0、原件審查與EPS庫以後方原件驗收為準，舊計數不是新增消息或目前模型狀態。", "small"))
         story += [p(text, "small") for text in v5["summary"]]
         state_counts = {}
         for row in v5["events"]["events"]:

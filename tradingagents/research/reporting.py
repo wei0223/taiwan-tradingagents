@@ -273,6 +273,8 @@ def package(
         estimate_section = render_estimate(result["forward_estimate"], table,
                                            result["v6_review"]["current_output_registry"])
     v6_section = render_v6(result["v6_review"], table)
+    if result["v6_review"].get("original_numeric_review"):
+        v5_section = render_v5(result["v5_review"], table, historical=True)
     dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
     if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
         decision["current_trade_conclusion_allowed"] = False

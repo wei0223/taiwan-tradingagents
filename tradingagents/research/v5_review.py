@@ -253,12 +253,15 @@ def build(snapshot, result, extension, documents):
             "base_is_most_likely": False, "new_forecast_issued": False}
 
 
-def render(review, table):
+def render(review, table, historical=False):
     if review.get("status") == "unavailable_no_research_plan":
         return ""
     from html import escape
 
-    out = '<section id="v5-review"><h2>V5：證據、模型差異與驗證</h2>'
+    out = '<section id="v5-review"'+(' data-scope="historical"' if historical else '')+'><h2>'+(
+        'V5：歷史審查基準（非本輪處理狀態）' if historical else 'V5：證據、模型差異與驗證')+'</h2>'
+    if historical:
+        out += '<p>以下保留原始未去重、未完成原件數值審查時的基準清單；本輪缺件、P0與複核結果以後方原件驗收為準，不把舊計數當新增消息或當前模型狀態。</p>'
     out += ''.join('<p>' + escape(s) + '</p>' for s in review["summary"])
     events = review["events"]["events"]
     out += table(["官方事件／來源", "公布時點", "狀態", "模型影響／原因"],
