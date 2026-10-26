@@ -98,7 +98,9 @@ def read_release(path):
         or fingerprint(result["debate"]) != result["debate_sha256"]
     ):
         raise ValueError("Release ledger modified")
-    if result.get("schema_version") == 2:
+    if result.get("release_kind") == "uncalibrated_research_forecast":
+        if result.get("schema_version") != 2:
+            raise ValueError("Unsupported prospective research release schema")
         from .prospective import verify_release
 
         verify_release(result, path)

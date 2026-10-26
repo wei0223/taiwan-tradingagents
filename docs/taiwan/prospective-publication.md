@@ -39,4 +39,7 @@ schema_version=2 的release保存模型、選擇、計算、原始資料清單�
 時間與版本審查；重編值另列診斷，不挑最好版本。沒有同口徑實績就pending，不算誤差。
 同一季營收與EPS是相關結果，不當作兩個獨立市場樣本。當季少量樣本不證明模型較準。
 
-`schema_version=1` 舊封存繼續由原入口讀取；新增功能不回寫舊發布。
+舊封存繼續由原入口讀取；新增功能不回寫舊發布。讀取格式按 `release_kind` 分流，
+不能只用 `schema_version`：既有 `monthly_revenue_only_research_delivery` 也使用版本2，
+其月營收與月合計不可送進四季損益驗證器；`uncalibrated_research_forecast` 版本2
+才使用新原件／四季重算驗證。舊版本1及舊月營收版本2均須保留原值與發布時間。

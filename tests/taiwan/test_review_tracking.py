@@ -11,6 +11,7 @@ from tests.taiwan.test_quality_upgrade import model_spec
 from tests.taiwan.test_research import snapshot
 from tradingagents.research.__main__ import main
 from tradingagents.research.bundle import build_bundle, canonical, fingerprint
+from tradingagents.research.publication import read_release
 from tradingagents.research.reporting import package
 from tradingagents.research.tracking import read_tracking, track
 from tradingagents.research.validation import forecast_errors
@@ -18,6 +19,8 @@ from tradingagents.research.validation import forecast_errors
 
 def sealed_fixture(root):
     record = {
+        "schema_version": 2,
+        "release_kind": "monthly_revenue_only_research_delivery",
         "stock_id": "3231",
         "issued_at": "2026-10-15T11:25:47+00:00",
         "input_bundle": {},
@@ -74,6 +77,19 @@ def actual_fixture(root):
 
 
 class ReviewTrackingTests(unittest.TestCase):
+    def test_monthly_schema_two_keeps_legacy_read_and_tracking_contract(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = sealed_fixture(root)
+            before = path.read_bytes()
+            release = read_release(path)
+            self.assertEqual(release["schema_version"], 2)
+            self.assertEqual(release["release_kind"], "monthly_revenue_only_research_delivery")
+            self.assertNotIn("sources", release)
+            result = read_tracking(track(path, [], root, lambda: datetime(2026, 10, 26, tzinfo=UTC)))
+            self.assertEqual(len(result["results"]["pending"]), 3)
+            self.assertEqual(result["original_issued_at"], release["issued_at"])
+            self.assertEqual(path.read_bytes(), before)
+
     def test_unknown_actual_publication_retained_but_not_scored(self):
         with tempfile.TemporaryDirectory() as root:
             path = sealed_fixture(root)
