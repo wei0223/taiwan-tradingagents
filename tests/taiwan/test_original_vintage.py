@@ -102,6 +102,13 @@ class VintageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             versions.knowledge(r, "2020-03-01", "2026-10-26")
 
+    def test_date_only_publication_cannot_claim_intraday_knowledge(self):
+        r = self.record()
+        r["published_at"] = "2020-02-10"
+        r["historical_version_proof"] = registry_proof(r)
+        with self.assertRaises(ValueError):
+            versions.knowledge(r, "2020-02-10T09:00:00+08:00", "2026-10-26")
+
     def attachment_record(self):
         r = self.record()
         raw = b"Synthetic exact version bytes, not issuer data"

@@ -8,12 +8,19 @@ version hash and its validity interval. No existing capture date is rewritten.
 import base64
 import hashlib
 import json
+from datetime import datetime
 from urllib.parse import urlsplit
 
 from .scenarios import timestamp
 
 OFFICIAL_HOSTS = {"doc.twse.com.tw", "mopsov.twse.com.tw", "mops.twse.com.tw",
                   "www.twse.com.tw", "www.tpex.org.tw"}
+
+
+def precise_time(value):
+    if len(value) <= 10 or datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is None:
+        raise ValueError("Historical publication/version intervals require exact zoned timestamps")
+    return timestamp(value)
 
 
 def original_bytes(receipt):
@@ -65,10 +72,10 @@ def official_binding(record, evaluated_at):
             raise ValueError("Immutable official attachment does not bind this exact version")
     if not record.get("published_at") or timestamp(bound["published_at"]) != timestamp(record["published_at"]):
         raise ValueError("Historical publication time differs from official version")
-    start, end = timestamp(bound["published_at"]), bound.get("replaced_at")
-    if end and timestamp(end) <= start:
+    start, end = precise_time(bound["published_at"]), bound.get("replaced_at")
+    if end and precise_time(end) <= start:
         raise ValueError("Invalid official version interval")
-    complete = timestamp(registry["history_complete_through"])
+    complete = precise_time(registry["history_complete_through"])
     if complete > timestamp(receipt["captured_at"]):
         raise ValueError("Registry cannot certify future revision history")
     return {"available_at": bound["published_at"], "replaced_at": end,
