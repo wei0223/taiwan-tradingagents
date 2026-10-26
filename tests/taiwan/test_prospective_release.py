@@ -1,6 +1,7 @@
 import base64
 import copy
 import hashlib
+import json
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -154,6 +155,18 @@ class ProspectiveReleaseTests(unittest.TestCase):
                     self.issue(folder)
                 stage['content'][key] = original
                 stage['artifact_sha256'] = fingerprint(stage['content'])
+
+    def test_forward_kind_cannot_downgrade_its_schema(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self.issue(folder)
+            record = read_release(path)
+            record['schema_version'] = 1
+            record.pop('release_sha256')
+            record['release_sha256'] = fingerprint(record)
+            changed = path.parent / (record['release_sha256'] + '.json')
+            changed.write_text(json.dumps(record), encoding='utf8')
+            with self.assertRaisesRegex(ValueError, 'Unsupported prospective'):
+                read_release(changed)
 
 
 if __name__ == '__main__':
