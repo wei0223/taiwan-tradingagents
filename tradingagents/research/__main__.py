@@ -17,6 +17,13 @@ from .debate import STAGES, load_json, load_run, register_agent, start_run, stop
 def main(argv=None, provider=None, material_client=None, resolution_client=None):
     parser = argparse.ArgumentParser(description="Taiwan research: ChatGPT-auth Codex only, no orders")
     commands = parser.add_subparsers(dest="command", required=True)
+    publication = commands.add_parser("publish-forward", help="Seal explicitly approved forecasts at actual issue time; no valuation promotion")
+    publication.add_argument("--bundle", type=Path, required=True)
+    publication.add_argument("--model", type=Path, required=True)
+    publication.add_argument("--debate", type=Path, required=True)
+    publication.add_argument("--selections", type=Path, required=True)
+    publication.add_argument("--review-input", type=Path, required=True)
+    publication.add_argument("--release-dir", type=Path, required=True)
     gap_audit = commands.add_parser("audit-gap-closure", help="Close scoped investigations without upgrading data eligibility")
     gap_audit.add_argument("--ledger", type=Path, required=True)
     gap_audit.add_argument("--review-input", type=Path, required=True)
@@ -146,6 +153,17 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     parameter.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "publish-forward":
+            from .prospective import publish as publish_forward
+            from .publication import read_release
+
+            path = publish_forward(args.release_dir, load_json(args.bundle), load_json(args.model),
+                                   load_json(args.debate), load_json(args.selections),
+                                   load_json(args.review_input)["documents"])
+            released = read_release(path)
+            print(json.dumps({"release": str(path), "issued_at": released["issued_at"],
+                              "release_sha256": released["release_sha256"], "predictions": len(released["predictions"])}))
+            return 0
         if args.command == "audit-gap-closure":
             from datetime import UTC, datetime
 

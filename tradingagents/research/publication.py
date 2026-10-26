@@ -98,4 +98,8 @@ def read_release(path):
         or fingerprint(result["debate"]) != result["debate_sha256"]
     ):
         raise ValueError("Release ledger modified")
+    if result.get("schema_version") == 2:
+        from .prospective import verify_release
+
+        verify_release(result, path)
     return result

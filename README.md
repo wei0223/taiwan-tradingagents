@@ -1,5 +1,9 @@
 # Taiwan TradingAgents — 台股資料與 Codex 多 Agent 研究
 
+新增[前瞻研究發布](docs/taiwan/prospective-publication.md)：`publish-forward` 以實際發布時間
+封存獨立辯論裁決核准的營收／EPS；四季條件模型與主要預測分開，原件bytes可核對並
+沿用 `track-release` 等待同口徑實績。發布不解除估值、缺季EPS或歷史績效限制。
+
 新增[缺口結案審查](docs/taiwan/gap-closure.md)：逐項區分可補齊、替代口徑及本輪
 範圍無法重建；日常報告與官方來源快照保存處置。工單結案不解除數值或歷史績效
 資格檢查，年度EPS不得填入缺季或滾動TTM，原封存預測與發布時間保持不變。
