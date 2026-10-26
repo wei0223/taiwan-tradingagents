@@ -49,6 +49,11 @@ def _packet(packet, stock, documents, cutoff, fields=(), allowed_scopes=("consol
     refs = packet.get("document_ids", [])
     if not refs or len(refs) != len(set(refs)):
         raise Unavailable("distinct_document_references_required")
+    from tradingagents.dataflows.taiwan.periods import superseded_documents
+
+    superseded = superseded_documents(documents, stock, cutoff)
+    if any(key in superseded for key in refs):
+        raise Unavailable("source_superseded_review_replacement_and_recompute_dependents")
     for key in refs:
         doc = documents[key]
         if doc.get("stock_id") != stock:

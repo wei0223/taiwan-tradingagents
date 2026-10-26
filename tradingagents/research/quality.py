@@ -48,6 +48,8 @@ class PortableHTML(HTMLParser):
 def audit_html(text):
     parser = PortableHTML()
     parser.feed(text)
+    if re.search(r"file:/|(?<![A-Za-z0-9])[A-Za-z]:[\\\\/]", text, re.I):
+        parser.errors.append("Local machine path in HTML; package relative evidence instead")
     missing = sorted(set(parser.links) - parser.ids)
     return {
         "status": "passed" if not parser.errors and not missing else "failed",
