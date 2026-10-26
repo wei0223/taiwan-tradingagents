@@ -716,6 +716,8 @@ def package(
     write_json(output / "publishing-quality.json", publication)
     write_json(output / "v5-review.json", result["v5_review"])
     write_json(output / "v6-review.json", result["v6_review"])
+    if result["v6_review"].get("original_numeric_review"):
+        write_json(output / "original-numeric-review.json", result["v6_review"]["original_numeric_review"])
     if result["v6_review"].get("schema_version") == 6:
         write_json(output / "resolution-queue.json", result["v6_review"]["resolution_queue"])
         write_json(output / "current-output-registry.json", result["v6_review"]["current_output_registry"])

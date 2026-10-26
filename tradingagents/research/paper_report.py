@@ -694,6 +694,13 @@ def render_pdf(directory, font_path):
                   table(["發布層級", "結果"], [[k,v] for k,v in v6["layered_gates"].items() if k in {"fact_summary","trade_market_inputs","formal_valuation_inputs"}], [80*mm,90*mm]),
                   p("嚴格逐期資料隔離：沒有當年已捕獲的輸入版本，就不產生回測結果。回補誤差不算forecast_hit_rate；所有原預測及發布時間不變。", "small")]
         folds=v6["pit_evaluation"].get("folds", [])
+        numeric=v6.get("original_numeric_review")
+        if numeric:
+            story.append(p("原件數值審查完成 "+str(numeric["numeric_reviews_completed"])+" 項；原文、單位倍率、去重對應、影響與未完成條件見 original-numeric-review.json。數值核對不等於未來EPS分母或現金時程已核對。", "small"))
+        inventory=v6.get("valuation_eps_inventory")
+        if inventory:
+            missing=', '.join(r["period"] for r in inventory["quarters"] if r["status"] != "verified_direct") or '無'
+            story.append(p("直接季度稀釋EPS原件 "+str(inventory["verified_count"])+"/4；缺季："+missing+"。目前可重算與歷史版本可用性分開。", "small"))
         if folds:
             story.append(table(["區段", "已知訓練月", "可算／待補起點", "狀態"],
                 [[r["fold"]["name"], r["input_training_months"], str(len(r["predictions"]))+" / "+str(len(r["pending"])), r["status"]] for r in folds],

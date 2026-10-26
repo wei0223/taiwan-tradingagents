@@ -94,7 +94,7 @@ def gates(work, market, cutoff, waivers=(), user_authorizations=()):
                 and timestamp(waiver["approved_at"]) <= timestamp(cutoff) < timestamp(waiver["expires_at"])):
             accepted.add(key)
     blocked = [r["event_id"] for r in work["items"] if r["affects_current_denominator"]
-               and r["resolution_state"] != "RESOLVED" and r["event_id"] not in accepted]
+               and r["resolution_state"] not in {"RESOLVED", "RESOLVED_SELECTED_CURRENT_FACTS"} and r["event_id"] not in accepted]
     return {"fact_summary": "PARTIAL" if blocked else "PASS_selected_facts",
             "trade_market_inputs": market.get("status", "FAIL"),
             "formal_valuation_inputs": "BLOCKED" if blocked else "PASS_selected_scope",
@@ -152,8 +152,12 @@ def execute(work, index_rows, documents, output, client=None, now=None, budget=1
                     break
         recent = [p for p in prior if p["event_id"] == item["event_id"] and p.get("receipt_sha256")
                   and timestamp(p["observed_at"]) + timedelta(days=1) > current]
-        if item["resolution_state"] == "RESOLVED":
+        if item["resolution_state"] in {"RESOLVED", "RESOLVED_SELECTED_CURRENT_FACTS"}:
+            record["resolution_state"] = item["resolution_state"]
             record["reason"] = "already_source_and_impact_reviewed"
+        elif item["resolution_state"] == "NUMBERS_VERIFIED_SCOPE_PENDING":
+            record.update(resolution_state=item["resolution_state"], numeric_transcription_verified=True,
+                          reason="numbers_verified_remaining_scope_not_closed")
         elif not cached_verified:
             if not row:
                 record["reason"] = "official_identity_or_scope_query_required_before_fetch"
