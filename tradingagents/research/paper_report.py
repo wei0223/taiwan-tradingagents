@@ -692,7 +692,7 @@ def render_pdf(directory, font_path):
         work=v6["resolution_queue"]
         story += [p("V6：缺件修復、五層驗證與資料隔離", "h2"),
                   p("公告、索引範圍與歷史缺口分開計數，不能合稱獨立重大消息。P0逐筆動作、來源URL、重試與人工複核狀態見同包resolution-queue.json。", "small"),
-                  table(["記錄類型", "筆數"], list(work["counts"].items()), [120*mm,50*mm]),
+                  p("分類計數：" + "；".join(str(k) + "=" + str(v) for k, v in work["counts"].items()), "small"),
                   p("參數分為schema_valid、source_supported、assumption_reviewed、historical_calibrated、forward_validated；前三項通過不等於後兩項通過。未來股數仍為假設，分母敏感度不代表稀釋資格已確認。", "small"),
                   table(["發布層級", "結果"], [[k,v] for k,v in v6["layered_gates"].items() if k in {"fact_summary","trade_market_inputs","formal_valuation_inputs"}], [80*mm,90*mm]),
                   p("嚴格逐期資料隔離：沒有當年已捕獲的輸入版本，就不產生回測結果。回補誤差不算forecast_hit_rate；所有原預測及發布時間不變。", "small")]
