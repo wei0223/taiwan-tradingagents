@@ -85,6 +85,15 @@ def audit(ledger, documents, evaluated_at, stock_id=None):
             "reopen_policy": "new_qualifying_official_evidence_then_new_review_version; never_elapsed_time_only"}
 
 
+def presentation_groups(review):
+    """Share identical restrictions only; keep each event and distinct criterion."""
+    groups = {}
+    for item in review["items"]:
+        key = (item["disposition_label"], tuple(item["excluded_uses"]), tuple(item["reopen_requirements"]))
+        groups.setdefault(key, []).append(item)
+    return list(groups.values())
+
+
 def render(review, table):
     if not review:
         return ""

@@ -124,6 +124,17 @@ class GapClosureTests(unittest.TestCase):
         other = {**doc, 'sha256': hashlib.sha256(body).hexdigest(), 'content_base64': base64.b64encode(body).decode()}
         self.assertEqual(len(index_rows({'first': doc, 'changed': other})), 2)
 
+    def test_presentation_groups_keep_distinct_reopen_requirements(self):
+        from tradingagents.research.gap_closure import presentation_groups
+
+        first = self.run_audit()['items'][0]
+        same = {**copy.deepcopy(first), 'id': 'another-event'}
+        different = {**copy.deepcopy(first), 'id': 'different-condition',
+                     'reopen_requirements': ['quarter-specific EPS denominator note']}
+        groups = presentation_groups({'items': [first, same, different]})
+        self.assertEqual([len(g) for g in groups], [2, 1])
+        self.assertEqual([i['id'] for g in groups for i in g], [first['id'], same['id'], different['id']])
+
 
 if __name__ == '__main__':
     unittest.main()
