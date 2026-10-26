@@ -136,7 +136,6 @@ def package(
 
     extra = build_extension(snapshot, reviewed, review_input, dynamics, extension_input)
     debate_review = validate_research_debate(debate_input, stock, snapshot, review_input)
-    dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
     sealed = None
     if release_path is not None:
         from .publication import read_release
@@ -265,6 +264,16 @@ def package(
     result["v5_review"] = build_v5(snapshot, result, extension_input or {},
                                    (review_input or {}).get("documents", {}))
     v5_section = render_v5(result["v5_review"], table)
+    from .v6_review import build as build_v6, render as render_v6
+
+    result["v6_review"] = build_v6(snapshot, result, extension_input or {},
+                                   (review_input or {}).get("documents", {}))
+    if result["v6_review"].get("schema_version") == 6 and result.get("forward_estimate"):
+        extra["research_plan"]["current_output_registry"] = result["v6_review"]["current_output_registry"]
+        estimate_section = render_estimate(result["forward_estimate"], table,
+                                           result["v6_review"]["current_output_registry"])
+    v6_section = render_v6(result["v6_review"], table)
+    dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
     if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
         decision["current_trade_conclusion_allowed"] = False
         decision["publication_status"] = "BLOCKED_STALE_OR_UNVERIFIED_MARKET"
@@ -626,6 +635,7 @@ def package(
         + period_section
         + publishing_section
         + estimate_section
+        + v6_section
         + v5_section
         + dashboard
         + registry_section
@@ -642,6 +652,10 @@ def package(
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
+    if result["v6_review"].get("schema_version") == 6:
+        from .output_registry import audit_presentation
+
+        result["v6_presentation_audit"] = audit_presentation(page, result["v6_review"]["current_output_registry"])
     result["html_audit"] = links
     output.mkdir(parents=True, exist_ok=True)
     if official_source_store:
@@ -701,6 +715,10 @@ def package(
     write_json(output / "research-observation.json", observation)
     write_json(output / "publishing-quality.json", publication)
     write_json(output / "v5-review.json", result["v5_review"])
+    write_json(output / "v6-review.json", result["v6_review"])
+    if result["v6_review"].get("schema_version") == 6:
+        write_json(output / "resolution-queue.json", result["v6_review"]["resolution_queue"])
+        write_json(output / "current-output-registry.json", result["v6_review"]["current_output_registry"])
     if result.get("forward_estimate"):
         write_json(output / "forward-estimate.json", result["forward_estimate"])
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
@@ -731,5 +749,12 @@ def package(
         from .paper_report import render_pdf
 
         render_pdf(output, pdf_font)
+    if result["v6_review"].get("schema_version") == 6:
+        from .resolution import execute, index_rows
+
+        docs = (review_input or {}).get("documents", {})
+        dispositions = execute(result["v6_review"]["resolution_queue"], index_rows(docs), docs,
+                               output/"source-repair"/"attempts", now=result["generated_at"], budget=0)
+        write_json(output/"source-repair"/"resolution-run.json", dispositions)
     seal(output)
     return result

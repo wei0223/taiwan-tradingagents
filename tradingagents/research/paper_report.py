@@ -171,7 +171,7 @@ def render_pdf(directory, font_path):
         story += [p("發布資格與資料時效", "h2"),
                   p("發布狀態 " + publishing["publishing_status"] + "；完整估值 " + publishing["full_valuation_status"]),
                   p("應有最後交易日 " + str(market["expected_last_session"]) + "；行情狀態 " + market["freshness"]),
-                  table(["檢查", "結果"], list(publishing["gates"].items()), [130 * mm, 40 * mm]),
+                  table(["檢查", "結果"], [("參數結構與具名審查（非校準／準確度）" if k == "forward_parameters_reviewed" else k,v) for k,v in publishing["gates"].items()], [130 * mm, 40 * mm]),
                   p("當前交易結論 BLOCKED；下文保留歷史觀察，R僅情境測量。" if not market["current_trade_conclusion_allowed"] else "當期行情通過時效檢查；仍須個別訊號及成本驗證。", "small"),
                   p("前瞻估值未完成的原因與每季假設狀態，見同包 publishing-quality.json；條件EPS不冒充已驗證分母。", "small")]
     conversion = data.get("financial_period_conversion")
@@ -199,12 +199,19 @@ def render_pdf(directory, font_path):
                       p("單季現金資本支出未核對時，FCF不可用。此比率不作跨產業排名；後文累計來源表僅按原期間閱讀。", "small")]
     estimate = data.get("forward_estimate")
     if estimate:
-        scenario_labels = {"bear": "保守假設", "base": "基準假設（非機率最可能）", "bull": "樂觀假設"}
+        current_registry = data.get("v6_review", {}).get("current_output_registry")
+        if current_registry:
+            from .output_registry import materialize
+
+            estimate = materialize(estimate, current_registry)
+            story += [p("當前條件模型："+current_registry["model_version"], "small"),
+                      p("run "+current_registry["calculation_run_id"][:16]+"；snapshot "+current_registry["input_snapshot_id"][:16]+"；source_as_of "+current_registry["source_as_of"], "small")]
+        scenario_labels = {"bear": "保守假設", "base": "基準條件（非機率最可能）", "bull": "樂觀假設"}
         story += [p("四季 EPS 預估與條件估值", "h2"), p(estimate["methodology"], "small"),
                   p("未來參數是明示推估；合理價與低估排名尚未成立。四季EPS和不是法定全年加權EPS。", "small"),
                   table(["情境", "四季EPS和（元）", "Forward PE（條件）"],
                         [[scenario_labels[n],f"{s['four_quarter_eps_sum_twd']:.2f}" if s['four_quarter_eps_sum_twd'] is not None else "BLOCKED",f"{s['forward_pe']:.2f}" if s['forward_pe'] is not None else "不可用"] for n,s in estimate['scenarios'].items()], [80*mm,45*mm,45*mm]),
-                  table(["季度／基準", "營收億", "毛利億", "歸母億", "稀釋EPS"],
+                  table(["季度／基準條件", "營收億", "毛利億", "歸母億", "稀釋EPS"],
                         [[c['period'],*[f"{c[k]/1e8:.2f}" if c[k] is not None else "未知" for k in ['revenue_twd','gross_profit_twd','parent_profit_twd']],f"{c['eps_twd']:.2f}" if c['eps_twd'] is not None else "未知"] for c in estimate['scenarios'].get('base',{}).get('quarters',[])], [30*mm,35*mm,35*mm,35*mm,35*mm]),
                   p("EPS × PE 敏感度矩陣（條件價格，非合理價）", "h3"),
                   table(["情境／PE",*estimate['pe_sensitivity']],[[n,*[f"{v:.0f}" for v in s['price_sensitivity_twd']]] for n,s in estimate['scenarios'].items()],[35*mm,*([27*mm]*len(estimate['pe_sensitivity']))]),
@@ -676,6 +683,22 @@ def render_pdf(directory, font_path):
                 if row.get("normalization_review", {}).get("matches_removed_fx_and_fair_value"):
                     story.append(p("舊版另排除匯兌與評價利益，新版沿用Q2淨業外。屬常態化假設改變，不是公司重編，也未證明預測更準。", "small"))
         story.append(p("逐筆公告差集、逐參數替代值／敏感度、歷史樣本及逐點PE口徑請見同包HTML與v5-review.json。缺少已公布原件是MISSING_PUBLISHED；公告時間未證明不得標為尚未發布。", "small"))
+
+    v6 = data.get("v6_review", {})
+    if v6.get("schema_version") == 6:
+        work=v6["resolution_queue"]
+        story += [p("V6：缺件修復、五層驗證與資料隔離", "h2"),
+                  p("公告、索引範圍與歷史缺口分開計數，不能合稱獨立重大消息。P0逐筆動作、來源URL、重試與人工複核狀態見同包resolution-queue.json。", "small"),
+                  table(["記錄類型", "筆數"], list(work["counts"].items()), [120*mm,50*mm]),
+                  p("參數分為schema_valid、source_supported、assumption_reviewed、historical_calibrated、forward_validated；前三項通過不等於後兩項通過。未來股數仍為假設，分母敏感度不代表稀釋資格已確認。", "small"),
+                  table(["發布層級", "結果"], [[k,v] for k,v in v6["layered_gates"].items() if k in {"fact_summary","trade_market_inputs","formal_valuation_inputs"}], [80*mm,90*mm]),
+                  p("嚴格逐期資料隔離：沒有當年已捕獲的輸入版本，就不產生回測結果。回補誤差不算forecast_hit_rate；所有原預測及發布時間不變。", "small")]
+        folds=v6["pit_evaluation"].get("folds", [])
+        if folds:
+            story.append(table(["區段", "已知訓練月", "可算／待補起點", "狀態"],
+                [[r["fold"]["name"], r["input_training_months"], str(len(r["predictions"]))+" / "+str(len(r["pending"])), r["status"]] for r in folds],
+                [40*mm,35*mm,40*mm,55*mm]))
+        story.append(p("辯論觸發："+v6["debate_trigger"]["reason"]+"；本次沒有新的已審查重大數值，不重跑Agent或發布預測。", "small"))
 
     def footer(canvas, doc):
         canvas.setFont("ResearchCJK", 7.5)
