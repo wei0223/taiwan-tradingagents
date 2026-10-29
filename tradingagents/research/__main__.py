@@ -146,6 +146,11 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     tracking.add_argument("--release", type=Path, required=True)
     tracking.add_argument("--actuals", type=Path)
     tracking.add_argument("--output-dir", type=Path, required=True)
+    tracking.add_argument("--report", action="store_true", help="Append a readable tracking report")
+    tracking.add_argument("--mock-report", action="store_true", help="Label the report as mock rehearsal, never performance")
+    drill = commands.add_parser("tracking-drill", help="Offline mock-only outcome rehearsal; never publishes")
+    drill.add_argument("--release", type=Path, action="append", required=True)
+    drill.add_argument("--output-dir", type=Path, required=True)
     parameter = commands.add_parser("score-parameter", help="Append a versioned operating-parameter forecast comparison")
     parameter.add_argument("--release", type=Path, required=True)
     parameter.add_argument("--actual", type=Path, required=True)
@@ -263,11 +268,24 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             write_json(args.output, result)
             print(json.dumps({"status": result["status"]}))
             return 0
+        if args.command == "tracking-drill":
+            from .tracking_drill import rehearse
+
+            result = rehearse(args.release, args.output_dir)
+            print(json.dumps({"mode": result["evaluation_mode"], "passed": result["passed"]}))
+            return 0
         if args.command == "track-release":
             from .tracking import read_tracking, track
 
-            path = track(args.release, load_json(args.actuals) if args.actuals else [], args.output_dir)
+            actuals = load_json(args.actuals) if args.actuals else []
+            if any(r.get("evidence_kind") == "mock" for r in actuals) and not args.mock_report:
+                raise ValueError("Mock actuals require --mock-report")
+            path = track(args.release, actuals, args.output_dir, mock=args.mock_report)
             result = read_tracking(path)
+            if args.report or args.mock_report:
+                from .tracking_report import write_tracking_report
+
+                write_tracking_report(args.release, path, mock=args.mock_report)
             print(json.dumps({"release_sha256": result["release_sha256"],
                               "status": result["primary_initial_vintage_results"]["status"]}))
             return 0

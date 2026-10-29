@@ -19,7 +19,7 @@ def _path(value):
     return path
 
 
-def track(release_path, actuals, output_root, clock=None):
+def track(release_path, actuals, output_root, clock=None, *, mock=False):
     release_path = _path(release_path)
     release = read_release(release_path)
     original_bytes = Path(release_path).read_bytes()
@@ -62,6 +62,8 @@ def track(release_path, actuals, output_root, clock=None):
         and r.get("source_locator")
     ]
     result = {
+        "evaluation_mode": "mock_rehearsal_not_performance"
+        if mock or any(r.get("evidence_kind") == "mock" for r in actuals) else "official_tracking",
         "release_sha256": release["release_sha256"],
         "checked_at": now.isoformat(),
         "actuals": actuals,
