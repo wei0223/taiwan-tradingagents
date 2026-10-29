@@ -4,6 +4,10 @@
 封存獨立辯論裁決核准的營收／EPS；四季條件模型與主要預測分開，原件bytes可核對並
 沿用 `track-release` 等待同口徑實績。發布不解除估值、缺季EPS或歷史績效限制。
 
+實績追蹤可加 `--report` 產生含原預測、合格實績、誤差與原改判條件的 HTML／JSON。
+`tracking-drill` 可對既有 release 執行離線 Mock 演練，所有虛構實績與報告獨立保存，
+不得列為正式績效。詳見 [評分演練與正式追蹤](docs/taiwan/tracking-rehearsal.md)。
+
 新增[缺口結案審查](docs/taiwan/gap-closure.md)：逐項區分可補齊、替代口徑及本輪
 範圍無法重建；日常報告與官方來源快照保存處置。工單結案不解除數值或歷史績效
 資格檢查，年度EPS不得填入缺季或滾動TTM，原封存預測與發布時間保持不變。
