@@ -1,0 +1,6 @@
+interface:
+  display_name: "台股研究報告"
+  short_description: "輸入股票代碼，自動準備當次資料並產出三分析師完整報告，完成後結束"
+  default_prompt: "使用 $taiwan-report 研究 2330，產出當次繁體中文報告，不持續追蹤。"
+policy:
+  allow_implicit_invocation: true
