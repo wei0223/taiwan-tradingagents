@@ -6,9 +6,11 @@
 
 本專案的既有GitHub流程：`wei0223/taiwan-tradingagents` → `taiwan-prepare.yml`，只能以 `ref=main` 執行。inputs使用request.json的workflow.inputs：symbols、start、as_of、mops_publications=true、extended=true。不得把Secret提供給feature/PR程式。
 
-先找有dispatch／run／artifact能力的連接工具。有已登入gh時可用 `gh workflow run taiwan-prepare.yml --repo wei0223/taiwan-tradingagents --ref main --json`，標準輸入為inputs物件。若工具沒有dispatch，使用已登入GitHub網頁完成同一操作。只在確實需要登入時請使用者登入；不索取密碼、驗證碼或Token。
+執行 `python scripts/prepare_data.py --request <完整request.json路徑>`。程式依序檢查CLI與登入、記錄main SHA和執行前run清單、只dispatch一次、綁定本次run、等待並下載原始artifact。`scripts/project.json`可設定`gh_executable`；設定是本機路徑，不是Token。GitHub CLI首次需要使用者完成官方授權，日後沿用目前作業系統使用者的登入；不同執行帳號不一定共用授權。沒有CLI或登入時先解決該前置條件，不先啟動瀏覽器操作。
 
-以股票與輸入日期、分支、觸發時間核對這次run，不能把別次成功run當本次結果。等待本次完成後下載artifact，解壓至request目錄的data/。單輪只有一次dispatch；需要重跑前先確認失敗原因且無重複工作正在執行。工作流程只準備資料，不會執行AI。資料缺件仍可能有artifact，讀取稽核結果而非只看綠色勾。
+這是可續跑入口，不是阻塞等待：遇到`awaiting_run`／`awaiting_workflow_completion`時，隔一段短時間重新執行同一request；最多等待25分鐘且不重送。讀`preparation.json`取得狀態，保留`preparation-history/`。`dispatch_uncertain_do_not_redispatch`也只查既有run，不能手動再按Run；`ambiguous_runs_requires_review`、逾時、缺artifact或損毀下載須先釐清，不能拿最新成功run充數。程式以actor、main SHA、event、前次清單及啟動時間核對；同一時段有多筆符合便停止選擇。每次重新呼叫都驗證請求hash，完成後也驗證snapshot hash。
+
+`data_available`或`data_available_with_workflow_warnings`才表示資料已下載。後者代表工作流程本身未全部通過，必須閱讀`data/audit.json`逐項判斷用途，不宣稱完整成功。主輸入固定為`data/<代碼>-<分析日>/snapshot.json`；`integrated/snapshot.json`是流程內另產生的副本，不能因有兩份而判斷下載失敗。只在同公司、同分析日且捕獲時間對應本次run時採用；財報原件、期間與數值的資格另由研究審查決定。`report_generated=false`在此階段正常，仍需完成下節研究、三Agent與交付，不能停在資料包。
 
 不要為本機便利讀回GitHub Secret。若使用者另有已配置本機FinMind環境，才可使用本機prepare；不列印Token。只在明示接受既有資料時沿用本機snapshot，不能將舊行情日期改成今天。
 
@@ -27,3 +29,5 @@ python -m tradingagents.research upgrade --snapshot <本次snapshot.json> --revi
 有新官方資料可另查核，但不得回填舊公布日或放寬財務期間／EPS資格檢查。當次分析不能取得的項目標為不可用；報告可以完整交代限制，不必啟動歷史缺口追蹤、正式發布或預測評分。
 
 交付格式是實際產生的report.html、可生成時的report.pdf及evidence.zip，不是request.json。開啟報告確認三位分析師內容、引用與日期；ZIP需包含可重現的輸入、計算和原件，而非只包PDF。
+
+本模式的extension輸入必須包含`stock_id`、`as_of`與`one_shot=true`；即使沒有完整模型也要傳入這個基本物件。這會使用單次研究版面，不把正式預測發布關卡當成報告前置作業；數值、期間、來源與估值資格檢查保持有效。request中的`upgrade_extension_defaults`供此用途。

@@ -53,6 +53,7 @@ def create_request(symbol, repository, output_root, as_of=None, start=None, cloc
         "forecast_mode": "labelled_company_specific_research_assumptions",
         "valuation_mode": "conditional_unless_independently_qualified",
         "source_review_required": True,
+        "upgrade_extension_defaults": {"stock_id": stock, "as_of": cutoff.isoformat(), "one_shot": True},
         "backtest_required": False,
         "publish_forecasts": False,
         "create_or_resume_monitor": False,

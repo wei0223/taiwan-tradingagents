@@ -246,10 +246,19 @@ def package(
     publication = assess_publishing(
         snapshot, result, extension_input, (review_input or {}).get("documents", {})
     )
+    one_shot = (extension_input or {}).get("one_shot") is True
+    result["report_mode"] = "on_demand" if one_shot else "research_review"
     result["publishing_quality"] = publication
     result["publishing_status"] = publication["publishing_status"]
     result["latest_market_gate"] = publication["latest_market_gate"]
     publishing_section = render_publishing(publication, table)
+    if one_shot:
+        publishing_section = (
+            '<section id="publishing-quality"><h2>本次單次研究</h2>'
+            '<p>本次依所列資料日期完成研究，不發布正式預測、不評分、不建立追蹤。'
+            '前瞻數字是明示假設的條件試算；來源與EPS／估值資格檢查仍保留，'
+            '有條件EPS不代表合理價已獲驗證。</p></section>'
+        )
     estimate_section = ""
     if (extension_input or {}).get("forward_estimate"):
         from .forward_estimate import build as build_estimate, render as render_estimate
@@ -369,6 +378,8 @@ def package(
             rows,
         )
         summary += "<p>年度欄為季度稀釋 EPS 加總近似，非經查核年度加權稀釋 EPS。來源報列本益比未核實分母口徑，因此不標為 TTM PE。情境價格不是目標價；報酬風險比若有列示，也僅依明示進場與失效假設計算，並非可執行報價或保證停損。</p>"
+    elif one_shot:
+        summary += '<h2>前瞻 EPS 與條件估值</h2><p>逐季條件計算、參數依據與限制見<a href="#model-appendix">財務模型</a>及基本面分析師正文；不是已校準預測或已驗證合理價。</p>'
     else:
         summary += '<h2>前瞻 EPS 與估值：依資格分級</h2><p>可計算的條件 EPS 與缺項逐季列於上方發布資格表；完整前瞻估值未通過時不給合理價或低估排名。<a href="#publishing-quality">查看條件試算與阻擋原因</a>。</p>'
     summary += "<h2>什麼會改變各項判斷？</h2>" + table(
@@ -619,7 +630,7 @@ def package(
             ],
         )
     # Audit payloads stay in portable attachments, never inline in the reading page.
-    details += '<section class="machine-audit no-print"><h2>完整證據與計算</h2><p><a href="research.json">計算結果</a> · <a href="publishing-quality.json">發布驗收與假設</a> · <a href="delivery-manifest.json">SHA256 清單</a> · <a href="evidence.zip">完整證據包</a>。獨立 Agent 原稿及既有辯論保存在附件，本輪未重新執行辯論。</p></section>'
+    details += '<section class="machine-audit no-print"><h2>完整證據與計算</h2><p><a href="research.json">計算結果</a> · <a href="publishing-quality.json">發布驗收與假設</a> · <a href="delivery-manifest.json">SHA256 清單</a> · <a href="evidence.zip">完整證據包</a>。' + ('本次獨立 Agent 開場、交叉反駁及風險裁決保存在附件。' if debate_review["independent_agents_executed"] else '本次未執行獨立辯論；既有原稿保留原日期，不冒充新執行。') + '</p></section>'
     reading_gap = (
         '<p class="reading-gap">本版尚缺分析師裁決欄位或有未綁定引用；'
         "結構檢查不代表研究論點已被驗證，詳見 reading-review.json。</p>"

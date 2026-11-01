@@ -17,3 +17,7 @@ $taiwan-report 2330
 本模式不發布正式預測、不評分舊預測、不建立或恢復排程，不持續追蹤。原報告、原預測及其發布時間保留；現有四項監測保持暫停。發布／追蹤入口仍供明確要求時使用，不再是預設操作。
 
 個人技能可安裝在使用者 `.agents/skills/taiwan-report`，`scripts/project.json`只保存本機儲存庫與輸出路徑，不含Token。開源技能原件位於儲存庫 `skills/taiwan-report`；測試不使用Sponsor額度或真實股票資料。
+
+## 可續跑的資料入口
+
+技能以`prepare_data.py --request <request.json>`使用GitHub CLI，首次完成官方授權後不需每次操作Edge。CLI預檢在dispatch之前，等待、下載或Codex中斷都續用同一請求；不因重試產生重複run。準備狀態與報告產生狀態分開，workflow品質檢查失敗仍可下載artifact，但需逐項讀取警示，不能當完整成功。主snapshot與integrated副本分開；取得資料後仍須完成研究才交付。
