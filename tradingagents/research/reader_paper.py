@@ -281,7 +281,11 @@ def render_pdf(directory, font_path):
                 ],
             ),
             p(
-                f"投信淨買{market['trust_buy_days']}日中，{market['trust_buy_down_days']}日股價下跌。價格分組不是法人買進成本；缺值不補零。",
+                (
+                    f"投信淨買{market['trust_buy_days']}日中，{market['trust_buy_down_days']}日股價下跌。價格分組不是法人買進成本；缺值不補零。"
+                    if market["trust_buy_days"] is not None
+                    else "投信分類不足，買超日與下跌日統計不可用；缺值不補零。"
+                ),
                 "small",
             ),
         ]
