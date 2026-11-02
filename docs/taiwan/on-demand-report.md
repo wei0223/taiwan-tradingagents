@@ -21,3 +21,5 @@ $taiwan-report 2330
 ## 可續跑的資料入口
 
 技能以`prepare_data.py --request <request.json>`使用GitHub CLI，首次完成官方授權後不需每次操作Edge。CLI預檢在dispatch之前，等待、下載或Codex中斷都續用同一請求；不因重試產生重複run。準備狀態與報告產生狀態分開，workflow品質檢查失敗仍可下載artifact，但需逐項讀取警示，不能當完整成功。主snapshot與integrated副本分開；取得資料後仍須完成研究才交付。
+
+閱讀版首頁為研究結論；正式upgrade已整合[研究深度與閱讀分層](reader-research.md)。完整工程狀態在audit.html，資料與原件在可攜證據包。

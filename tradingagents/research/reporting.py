@@ -662,6 +662,15 @@ def package(
         + ' · <a href="reading-review.json">閱讀結構檢查</a> · <a href="research.json">完整計算</a>'
         + "。此版面不代表模型或交易策略已有績效證明。</footer></main></body></html>"
     )
+    audit_page = None
+    if one_shot:
+        from .reader_research import build as build_reader
+        from .reader_view import render as render_reader
+
+        result["reader_research"] = build_reader(snapshot, extra, (extension_input or {}).get("reader_research"))
+        result["reader_pdf_requested"] = pdf_font is not None
+        audit_page = page
+        page = render_reader(result, notes, snapshot, table)
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
@@ -678,6 +687,16 @@ def package(
         target = output / path
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(content)
+    if audit_page is not None:
+        (output / "audit.html").write_text(audit_page, encoding="utf-8")
+        write_json(output / "reader-research.json", result["reader_research"])
+        reader_sources = (extension_input or {}).get("reader_research", {}).get("sources", {})
+        for source in reader_sources.values():
+            target = output / "reader-sources" / (source["sha256"] + ".pdf")
+            target.parent.mkdir(exist_ok=True)
+            raw = base64.b64decode(source["content_base64"], validate=True)
+            if not target.exists():
+                target.write_bytes(raw)
     write_json(output / "snapshot.json", snapshot)
     write_json(output / "source-snapshot.json", source_snapshot)
     write_json(output / "period-conversion.json", period_audit)
@@ -763,7 +782,10 @@ def package(
     from .delivery import seal
 
     if pdf_font is not None:
-        from .paper_report import render_pdf
+        if one_shot:
+            from .reader_paper import render_pdf
+        else:
+            from .paper_report import render_pdf
 
         render_pdf(output, pdf_font)
     if result["v6_review"].get("schema_version") == 6:
