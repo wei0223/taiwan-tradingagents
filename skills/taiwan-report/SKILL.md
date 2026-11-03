@@ -19,6 +19,19 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 僅在實際登入或權限阻擋時請使用者處理；不要為正常股票、日期或例行資料擷取重複確認。若無法取得當次資料，交付明確的阻礙與已能驗證的部分，不拿舊資料假裝最新。既有資料只可作歷史比較；使用者指定沿用時，明示資料日。
 
+
+## 固定計算與公司資料庫（必經）
+
+資料下載完成後執行 `scripts/prepare_research.py --request <request.json>`，讀取 `fixed-inputs/fixed-state.json`、`technical-package.json`、`company-plan.json`、`company-instructions.md` 及 `company-input-template.json`。這一步不重新啟動 Sponsor，也不產生研究結論。依賴缺少時安裝儲存庫 `requirements-fixed-research.txt` 的固定版本；不要臨時換公式。
+
+技術面只引用固定計算包：1000個完整官方交易日、明確的參數／暖機期、原始價與還原價分開、完整週K。不得用舊snapshot的technical欄位取代、讓LLM補算或另選參數。驗收失敗仍可交付受限報告，但停止技術指標與推論。AI的technical段落必須填入 `technical_package_sha256`，值等於fixed-state的technical_sha256；程式會拒用未綁定的技術論述。
+
+按固定公司查閱計畫檢查近3年年報、8季財報與EPS／現金流附註、60個月營收、近550日法說與股本／募資／更正清單。計畫涵蓋尚未公布期間，不能視為已公告。先用company-latest找已保存版本，只重用核對過的原件；舊快照不代表當期完整。每份公司／同業原件獨立保存來源、公布與捕獲時間、雜湊及版本；每筆事實綁原句、實體頁碼、欄位、期間、單位與審查人。模型假設放assumptions，不進facts。產品組合、產能與客戶認證缺證就分類列缺口，不編造。
+
+使用 `company-import` 保存不可變版本，再以 `company-audit` 驗證；同一欄位多版本必須明選。即使資料不足，也要匯入明列缺口的公司快照，不跳過SOP。不能只填旗標就宣稱官方初版、語意已核對或符合歷史回測。公司資料庫不會自動放寬既有財務／EPS資格。
+
+正式報告必須使用 `upgrade --fixed-pipeline --company-snapshot <company-reference.json>`；公司與分析截止日須一致。其他模型、財務審查、三分析師與真實辯論參數沿用原入口。最後確認報告附件包含固定計算包、K線圖、公司計畫、已選事實、原件及版本，而不是只交PDF。
+
 ## 研究
 
 股票上市／上櫃與資料後綴由Provider metadata確認，不依代碼猜測。單季、累計、合併／個體、幣別、單位、公布與捕獲時間、版本逐項核對。未知期間停止相關計算，缺列不補零，EPS與加權股數不差分。遵守官方來源冷卻，不繞過拒絕。

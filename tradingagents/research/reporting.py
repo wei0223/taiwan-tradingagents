@@ -126,6 +126,13 @@ def package(
             "Explicit illustrative entry/loss assumptions; not fills or guaranteed exits"
         )
     stock, as_of = bundle["stock_id"], bundle["as_of"]
+    fixed_technical = fixed_company = fixed_state = original_analyst_input = None
+    if (extension_input or {}).get("fixed_pipeline") is True:
+        from .fixed_pipeline import report_inputs
+        if not extension_input.get("company_snapshot"):
+            raise ValueError("Fixed pipeline requires a selected company snapshot; import classified gaps rather than bypass the SOP")
+        original_analyst_input = copy.deepcopy(analyst_prose or {})
+        fixed_technical, fixed_company, analyst_prose, fixed_state = report_inputs(source_snapshot, extension_input, analyst_prose)
     notes, missing_notes = normalize_notes(analyst_prose, stock, as_of)
     source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
     unresolved_refs = set()
@@ -178,6 +185,10 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    if fixed_state is not None:
+        result["fixed_pipeline"] = fixed_state
+        result["fixed_technical"] = {k: fixed_technical[k] for k in ("status", "engine_version", "history", "input_sha256")}
+        result["fixed_technical_latest"] = fixed_technical.get("price_series", {}).get("raw", {}).get("latest", {})
     result["financial_period_conversion"] = period_audit
     from .financial_periods import render_section
 
@@ -670,7 +681,10 @@ def package(
         result["reader_research"] = build_reader(snapshot, extra, (extension_input or {}).get("reader_research"))
         result["reader_pdf_requested"] = pdf_font is not None
         audit_page = page
+        if fixed_technical is not None:
+            result["_technical_package"] = fixed_technical
         page = render_reader(result, notes, snapshot, table)
+        result.pop("_technical_package", None)
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
@@ -697,6 +711,19 @@ def package(
             raw = base64.b64decode(source["content_base64"], validate=True)
             if not target.exists():
                 target.write_bytes(raw)
+    if fixed_state is not None:
+        from .company_database import export as export_company, plan as company_plan
+        from .technical_chart import svg
+        write_json(output / "technical-package.json", fixed_technical)
+        write_json(output / "fixed-state.json", fixed_state)
+        write_json(output / "analysts-input.json", original_analyst_input)
+        write_json(output / "company-plan.json", company_plan(stock, as_of, snapshot["instrument"]["exchange"]))
+        if fixed_technical["status"] == "ready":
+            (output / "candles.svg").write_text(svg(fixed_technical), encoding="utf8")
+            (output / "weekly-candles.svg").write_text(svg(fixed_technical, True), encoding="utf8")
+        if fixed_company is not None:
+            write_json(output / "company-package.json", fixed_company)
+            write_json(output / "company-reference.json", export_company(extension_input["company_snapshot"], output / "company-database"))
     write_json(output / "snapshot.json", snapshot)
     write_json(output / "source-snapshot.json", source_snapshot)
     write_json(output / "period-conversion.json", period_audit)

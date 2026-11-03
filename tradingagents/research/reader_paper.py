@@ -205,6 +205,15 @@ def render_pdf(directory, font_path):
     else:
         story.append(p("四個連續季度模型尚不足，停止倒推。"))
     story += [p("技術與籌碼｜價格、成交量、法人同軸", "h2")]
+    if data.get("fixed_pipeline"):
+        from .technical_chart import drawing
+        technical = json.loads((root / "technical-package.json").read_text(encoding="utf8"))
+        story.append(p("固定指標與K線：程式計算", "h3"))
+        if technical["status"] == "ready":
+            story.extend([drawing(technical), drawing(technical, weekly=True)])
+            story.append(p("完整固定參數、1000日指標序列及61項型態在technical-package.json；沒有LLM補算。", "small"))
+        else:
+            story.append(p("固定歷史或依賴驗收未通過，停止指標與K線；沒有用舊指標或LLM替代。"))
     series = market["series"]
     if series:
         d = Drawing(510, 420)

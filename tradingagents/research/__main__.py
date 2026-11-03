@@ -156,8 +156,72 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     parameter.add_argument("--actual", type=Path, required=True)
     parameter.add_argument("--evaluated-at", required=True)
     parameter.add_argument("--output", type=Path, required=True)
+    fixed = commands.add_parser("fixed-inputs", help="Deterministic 1000-session indicators and fixed company SOP, no LLM")
+    fixed.add_argument("--snapshot", type=Path, required=True)
+    fixed.add_argument("--output-dir", type=Path, required=True)
+    company_plan = commands.add_parser("company-plan", help="Fixed company source and fact collection plan")
+    company_plan.add_argument("--stock", required=True)
+    company_plan.add_argument("--as-of", required=True)
+    company_plan.add_argument("--exchange", choices=("twse", "tpex"))
+    company_plan.add_argument("--output", type=Path, required=True)
+    company_import = commands.add_parser("company-import", help="Verify original quotes and append a company snapshot")
+    company_import.add_argument("--input", type=Path, required=True)
+    company_import.add_argument("--database-dir", type=Path, required=True)
+    company_import.add_argument("--output", type=Path, required=True)
+    company_audit = commands.add_parser("company-audit", help="Verify a saved company snapshot and original bytes")
+    company_audit.add_argument("--reference", type=Path, required=True)
+    company_audit.add_argument("--output", type=Path, required=True)
+    prepare.add_argument("--fixed-technical", action="store_true", help="Bounded history acquisition and fixed 1000-session engine")
+    upgrade.add_argument("--fixed-pipeline", action="store_true")
+    upgrade.add_argument("--company-snapshot", type=Path)
+    company_latest = commands.add_parser("company-latest", help="Select a previous immutable company snapshot; never claim freshness")
+    company_latest.add_argument("--database-dir", type=Path, required=True)
+    company_latest.add_argument("--stock", required=True)
+    company_latest.add_argument("--as-of", required=True)
+    company_latest.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "fixed-inputs":
+            from .fixed_pipeline import prepare as prepare_fixed
+            result = prepare_fixed(load_json(args.snapshot), args.output_dir)
+            print(json.dumps(result))
+            return 0 if result["technical_status"] == "ready" else 1
+        if args.command == "company-latest":
+            from .company_database import latest
+            if args.output.exists():
+                raise ValueError("Use a new selection output")
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            result = latest(args.database_dir, args.stock, args.as_of)
+            write_json(args.output, result)
+            print(json.dumps({"status": result["status"]}))
+            return 0 if result["status"] != "not_found" else 1
+        if args.command == "company-plan":
+            from .company_database import plan
+            result = plan(args.stock, args.as_of, args.exchange)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            if args.output.exists():
+                raise ValueError("Use a new company plan output")
+            write_json(args.output, result)
+            print(json.dumps({"status": "plan_created", "sop_version": result["sop_version"]}))
+            return 0
+        if args.command == "company-import":
+            from .company_database import append
+            if args.output.exists():
+                raise ValueError("Use a new company import reference")
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            result = append(load_json(args.input), args.database_dir)
+            write_json(args.output, result)
+            print(json.dumps({"status": result["status"], "snapshot_sha256": result["snapshot_sha256"]}))
+            return 0
+        if args.command == "company-audit":
+            from .company_database import read
+            if args.output.exists():
+                raise ValueError("Use a new company audit output")
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            result = read(args.reference)
+            write_json(args.output, result)
+            print(json.dumps({"status": result["status"], "facts": len(result["facts"]), "strict_pit_ready": False}))
+            return 0
         if args.command == "publish-forward":
             from .prospective import publish as publish_forward
             from .publication import read_release
@@ -312,6 +376,16 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
 
             snapshot = load_json(args.snapshot)
             extension = load_json(args.extension_input) if args.extension_input else None
+            if args.fixed_pipeline or args.company_snapshot:
+                extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
+                extension.update(one_shot=True, fixed_pipeline=True)
+                if args.company_snapshot:
+                    from .company_database import read
+                    read(args.company_snapshot)
+                    reference = load_json(args.company_snapshot)
+                    store = Path(reference["source_store"])
+                    reference["source_store"] = str(store if store.is_absolute() else args.company_snapshot.parent / store)
+                    extension["company_snapshot"] = reference
             if args.research_plan:
                 extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
                 if extension.get("research_plan"):
@@ -356,7 +430,11 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             summary = []
             for symbol in symbols:
                 try:
-                    snapshot = provider.snapshot(symbol, args.start, args.as_of)
+                    if args.fixed_technical:
+                        from .technical_engine import acquire_history
+                        snapshot = acquire_history(provider, symbol, args.start, args.as_of)
+                    else:
+                        snapshot = provider.snapshot(symbol, args.start, args.as_of)
                     if args.financial_period_review_dir:
                         from tradingagents.dataflows.taiwan.periods import refresh_snapshot
 
@@ -376,6 +454,9 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                             snapshot["material_event_audit"] = client.query(snapshot["instrument"]["stock_id"], beginning, args.as_of)
                         except VendorError as exc:
                             snapshot["material_event_audit"] = {**getattr(exc, "failure_receipt", {}), "status": "unavailable", "rows": []}
+                    if args.fixed_technical:
+                        from .technical_engine import build as build_technical
+                        snapshot["fixed_technical"] = build_technical(snapshot)
                     reject_secret(snapshot, token)
                     bundle = build_bundle(snapshot)
                     if args.archive_dir:
@@ -386,7 +467,7 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                     start_run(bundle, folder)
                     # Original dates, raw excluded rows, and full provenance are kept for audit.
                     write_json(folder / "snapshot.json", snapshot)
-                    summary.append({"symbol": symbol, "status": "prepared", "path": folder.name,
+                    summary.append({"symbol": symbol, "status": "prepared" if not args.fixed_technical or snapshot["fixed_technical"]["status"] == "ready" else "prepared_technical_blocked", "path": folder.name,
                                     "bundle_sha256": fingerprint(bundle),
                                     "critical_data_missing": bundle["requires_insufficient_data"]})
                 except (VendorError, ValueError, KeyError, TypeError):

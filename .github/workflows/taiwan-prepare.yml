@@ -42,7 +42,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install data-only dependencies (no secrets in environment)
-        run: python -m pip install python-dotenv requests
+        run: python -m pip install python-dotenv requests -r requirements-fixed-research.txt
       - name: Prepare evidence bundles with Sponsor Token
         id: prepare
         continue-on-error: true
@@ -55,7 +55,7 @@ jobs:
           EXTENDED_RESEARCH: ${{ inputs.extended }}
         run: |
           options=(--require-token --output-dir research-data --archive-dir research-data/vintages)
-          if [ "$EXTENDED_RESEARCH" = "true" ]; then options+=(--extended --material-events); fi
+          if [ "$EXTENDED_RESEARCH" = "true" ]; then options+=(--extended --material-events --fixed-technical); fi
           if [ "$MOPS_PUBLICATIONS" = "true" ]; then options+=(--mops-publications); fi
           python -m tradingagents.research prepare "${options[@]}"
       - name: Audit captured evidence without credentials
