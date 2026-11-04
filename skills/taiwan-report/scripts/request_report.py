@@ -50,7 +50,7 @@ def create_request(symbol, repository, output_root, as_of=None, start=None, cloc
             "inputs": {"symbols": supplied, "start": first.isoformat(), "as_of": cutoff.isoformat(),
                        "mops_publications": True, "extended": True}},
         "analysts": ["fundamental", "technical", "institutional"],
-        "forecast_mode": "labelled_company_specific_research_assumptions",
+        "forecast_mode": "factset_public_annual_eps_median",
         "valuation_mode": "conditional_unless_independently_qualified",
         "source_review_required": True,
         "upgrade_extension_defaults": {"stock_id": stock, "as_of": cutoff.isoformat(), "one_shot": True, "fixed_pipeline": True, "agent_protocol": "fixed-research-agents-v1"},
