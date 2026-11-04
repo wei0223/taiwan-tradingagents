@@ -26,11 +26,11 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 技術面只引用固定計算包：1000個完整官方交易日、明確的參數／暖機期、原始價與還原價分開、完整週K。不得用舊snapshot的technical欄位取代、讓LLM補算或另選參數。驗收失敗仍可交付受限報告，但停止技術指標與推論。AI的technical段落必須填入 `technical_package_sha256`，值等於fixed-state的technical_sha256；程式會拒用未綁定的技術論述。
 
-按固定公司查閱計畫檢查近3年年報、8季財報與EPS／現金流附註、60個月營收、近550日法說與股本／募資／更正清單。計畫涵蓋尚未公布期間，不能視為已公告。先用company-latest找已保存版本，只重用核對過的原件；舊快照不代表當期完整。每份公司／同業原件獨立保存來源、公布與捕獲時間、雜湊及版本；每筆事實綁原句、實體頁碼、欄位、期間、單位與審查人。模型假設放assumptions，不進facts。產品組合、產能與客戶認證缺證就分類列缺口，不編造。
+先按固定planner指令完成並驗收研究規劃，再按其公司專屬問題與固定公司查閱計畫檢查近3年年報、8季財報與EPS／現金流附註、60個月營收、近550日法說與股本／募資／更正清單。計畫涵蓋尚未公布期間，不能視為已公告。先用company-latest找已保存版本，只重用核對過的原件；舊快照不代表當期完整。每份公司／同業原件獨立保存來源、公布與捕獲時間、雜湊及版本；每筆事實綁原句、實體頁碼、欄位、期間、單位與審查人。模型假設放assumptions，不進facts。產品組合、產能與客戶認證缺證就分類列缺口，不編造。
 
 使用 `company-import` 保存不可變版本，再以 `company-audit` 驗證；同一欄位多版本必須明選。即使資料不足，也要匯入明列缺口的公司快照，不跳過SOP。不能只填旗標就宣稱官方初版、語意已核對或符合歷史回測。公司資料庫不會自動放寬既有財務／EPS資格。
 
-正式報告必須使用 `upgrade --fixed-pipeline --company-snapshot <company-reference.json>`；公司與分析截止日須一致。其他模型、財務審查、三分析師與真實辯論參數沿用原入口。最後確認報告附件包含固定計算包、K線圖、公司計畫、已選事實、原件及版本，而不是只交PDF。
+正式報告必須使用 `upgrade --fixed-pipeline --company-snapshot <company-reference.json>`；公司與分析截止日須一致。財務審查與模型輸入仍沿用原資格規則；三分析師與辯論由固定agent-run提供，不另外寫參數覆蓋。最後確認報告附件包含固定計算包、K線圖、公司計畫、已選事實、原件及版本，而不是只交PDF。
 
 ## 研究
 
@@ -38,7 +38,9 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 程式計算財務、技術與籌碼數字；Codex解釋。正文維持基本面、技術面、籌碼面三位分析師。每位提出完整論述、主要主張、量化證據、最強反證、關鍵分歧及可檢驗的改判條件。公司研究規則可以共用，數值假設不得套用別家公司。
 
-為這份報告實際分派獨立多方、空方與風險子Agent：以 `fork_turns=none` 建立新context，開場提示只提供相同原件／計算路徑，不帶既有基準模型數字或另一方結論；各交叉反駁一次，再由風險審查與主Agent裁決。保存真實派工識別、原稿、引用及前後立場。只有工具真的執行後才能聲稱獨立辯論；能力不足時交付受限版本並清楚標記，不假扮多Agent。
+所有AI研究與辯論使用fixed-research-agents-v1。按[固定Agent執行入口](references/fixed-agents.md)完成planner→三分析師及獨立多空開場→各一輪反駁→獨立risk→decision。只使用agent-prompt產生的指令，不臨時重寫角色要求；結果走agent-submit及agent-audit，保存版本、完整渲染指令、來源雜湊、實際派工收據和原始回覆。主預估EPS仍只用公開FactSet轉引中位數。
+
+正式單次報告必須傳--agent-run及request內agent_protocol。程式直接使用已驗收三分析師與裁決，不在報告階段另寫AI正文；不要另傳analysts/debate-input或reader_research覆蓋結論。多空開場各用fork_turns=none，反駁回原Agent，risk使用第三個新Agent。只有真實工具執行後才能聲稱獨立辯論，收據不是派工的自動證明。能力不足明列受限或停止，不編造。
 
 預估EPS的主欄位採公開可查的FactSet轉引「年度中位數」，目前支援鉅亨news.cnyes.com、m.cnyes.com、gfemobile.cnyes.com的/news/id/文章。只查公開報導，未授權直接FactSet API；不新增付費服務。先按股票代碼及FactSet/EPS搜尋，開啟原文確認公司、年度、報導時間及中位數表，再保存UTF-8 HTML原始bytes、URL、captured_at、sha256、content_base64至extension-input.public_eps={stock_id,as_of,sources:{id:source}}。模板見fixed-inputs/public-eps-input-template.json。程式直接解析EPS表並保留原件；搜尋摘要、新聞目標價、平均數不能替代中位數。取得不到就明列不可用，不以自建EPS補位。
 
@@ -48,7 +50,7 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 ## 研究深度與閱讀層
 
-依儲存庫`docs/taiwan/reader-research.md`，將已核對的公司/同業原件、競爭命題的財務傳導與失效條件填入`extension-input.reader_research`。沒有獨立產品毛利或認證時，明示公司自述與假設，不能把伺服器應用占比當液冷占比。同業期間、範圍與單位一致，鄰近業務不作直接PE錨。
+將已核對公司/同業原件匯入company資料庫，按固定fundamental模板在question_answers、findings與paragraphs說明競爭命題、財務傳導與失效條件；不另填reader_research的AI正文。沒有獨立產品毛利或認證時，明示公司自述與假設，不能把伺服器應用占比當液冷占比。同業期間、範圍與單位一致，鄰近業務不作直接PE錨。
 
 用現有四季瀑布求現價在明示PE下所需收入、毛利率、股數，逐項只變一個因素；指出達成難度，不能稱市場共識。單季辯論壓力橋不乘四冒充四季。多空摘要只留具體EPS差、來源及改判條件，完整重複原稿入證據包。
 

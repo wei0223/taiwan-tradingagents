@@ -84,6 +84,27 @@ def package(
             raise ValueError("Changed model requires a separate versioned forecast release")
     from .financial_periods import audit as audit_periods, prepare as prepare_periods
 
+    fixed_agents = None
+    if (extension_input or {}).get("agent_protocol"):
+        from .agent_protocol import PROTOCOL, report_inputs as agent_report_inputs
+        if extension_input["agent_protocol"] != PROTOCOL or not extension_input.get("agent_run"):
+            raise ValueError("Fixed research protocol requires an accepted agent run")
+        fixed_agents = agent_report_inputs(extension_input["agent_run"], snapshot, extension_input, review_input)
+        if analyst_prose is not None and fingerprint(analyst_prose) != fingerprint(fixed_agents["analysts"]):
+            raise ValueError("Use accepted fixed-agent analyst outputs, not rewritten notes")
+        analyst_prose = fixed_agents["analysts"]
+        extension_input = copy.deepcopy(extension_input)
+        existing_editorial = extension_input.get("reader_research", {})
+        if set(existing_editorial) - {"stock_id", "as_of"}:
+            raise ValueError("Fixed protocol uses accepted decision text, not an ad-hoc editorial rewrite")
+        decision = fixed_agents["results"]["decision"]
+        extension_input["reader_research"] = {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"],
+            "verdict": ("Mock流程驗收，合成研究與派工紀錄不得作為正式分析。" if fixed_agents["mode"] == "mock" else decision["position"]), "data_note": ("固定協定結構通過；推論仍須依證據評估。" if fixed_agents["status"] == "complete_structure" else "受限研究：部分階段缺證或未完成；限制與原始回覆保存在附件。"),
+            "new_insights": [{"title": "較有力論點", "text": decision["stronger_case"]},
+                             {"title": "關鍵分歧", "text": decision["key_disagreement"]},
+                             {"title": "證據如何影響判斷", "text": decision["evidence_change"]}]}
+        if debate_input is not None:
+            raise ValueError("Fixed agent run already contains its debate; no replacement packet")
     source_snapshot = copy.deepcopy(snapshot)
     snapshot = prepare_periods(snapshot, review_input, extension_input)
     period_audit = audit_periods(source_snapshot, snapshot)
@@ -142,7 +163,7 @@ def package(
     from .research_extension import build as build_extension
 
     extra = build_extension(snapshot, reviewed, review_input, dynamics, extension_input)
-    debate_review = validate_research_debate(debate_input, stock, snapshot, review_input)
+    debate_review = fixed_agents["debate"] if fixed_agents else validate_research_debate(debate_input, stock, snapshot, review_input)
     sealed = None
     if release_path is not None:
         from .publication import read_release
@@ -185,6 +206,8 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    if fixed_agents:
+        result["agent_protocol_review"] = {"protocol": fixed_agents["protocol"], "status": fixed_agents["status"], "semantic_truth_verified": False}
     if (extension_input or {}).get("one_shot"):
         from .public_eps import build as public_eps
         result["public_eps"] = public_eps((extension_input or {}).get("public_eps"), stock, as_of)
@@ -759,7 +782,11 @@ def package(
     write_json(output / "extension.json", extra)
     write_json(output / "extension-input.json", extension_input or {})
     write_json(output / "debate-review.json", debate_review)
-    write_json(output / "debate-input.json", debate_input or {})
+    write_json(output / "debate-input.json", fixed_agents["results"] if fixed_agents else debate_input or {})
+    if fixed_agents:
+        from .agent_protocol import export as export_agents
+        export_agents(extension_input["agent_run"], output / "agent-run")
+        write_json(output / "agent-protocol-review.json", result["agent_protocol_review"])
     write_json(output / "bundle.json", bundle)
     if sealed is not None:
         write_json(output / "forecast-preservation.json", result["forecast_preservation"])

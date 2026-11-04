@@ -179,8 +179,42 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     company_latest.add_argument("--stock", required=True)
     company_latest.add_argument("--as-of", required=True)
     company_latest.add_argument("--output", type=Path, required=True)
+    agent_prompt = commands.add_parser("agent-prompt", help="Render a fixed stage prompt with dependency hashes")
+    agent_prompt.add_argument("--run", type=Path, required=True)
+    agent_prompt.add_argument("--stage", required=True)
+    agent_bind = commands.add_parser("agent-bind", help="Seal reviewed sources after fixed research planning")
+    agent_bind.add_argument("--run", type=Path, required=True)
+    agent_bind.add_argument("--company-reference", type=Path, required=True)
+    agent_bind.add_argument("--public-eps", type=Path)
+    agent_bind.add_argument("--review-input", type=Path)
+    agent_submit = commands.add_parser("agent-submit", help="Validate and archive a fixed agent result and dispatch receipt")
+    agent_submit.add_argument("--run", type=Path, required=True)
+    agent_submit.add_argument("--stage", required=True)
+    agent_submit.add_argument("--result", type=Path, required=True)
+    agent_submit.add_argument("--execution", type=Path, required=True)
+    agent_audit = commands.add_parser("agent-audit", help="Validate every fixed stage without publishing")
+    agent_audit.add_argument("--run", type=Path, required=True)
+    upgrade.add_argument("--agent-run", type=Path)
     args = parser.parse_args(argv)
     try:
+        if args.command == "agent-prompt":
+            from .agent_protocol import prepare_prompt
+            print(json.dumps(prepare_prompt(args.run, args.stage), ensure_ascii=False))
+            return 0
+        if args.command == "agent-bind":
+            from .agent_protocol import bind
+            result = bind(args.run, args.company_reference, load_json(args.public_eps) if args.public_eps else None, load_json(args.review_input) if args.review_input else None)
+            print(json.dumps(result))
+            return 0
+        if args.command == "agent-submit":
+            from .agent_protocol import submit as submit_agent_result
+            print(json.dumps(submit_agent_result(args.run, args.stage, load_json(args.result), load_json(args.execution), raw_result=args.result.read_bytes())))
+            return 0
+        if args.command == "agent-audit":
+            from .agent_protocol import assemble
+            result = assemble(args.run)
+            print(json.dumps({"protocol": result["protocol"], "status": result["status"], "independent_agents_executed": result["debate"]["independent_agents_executed"]}))
+            return 0
         if args.command == "fixed-inputs":
             from .fixed_pipeline import prepare as prepare_fixed
             result = prepare_fixed(load_json(args.snapshot), args.output_dir)
@@ -386,6 +420,9 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                     store = Path(reference["source_store"])
                     reference["source_store"] = str(store if store.is_absolute() else args.company_snapshot.parent / store)
                     extension["company_snapshot"] = reference
+            if args.agent_run:
+                extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
+                extension.update(one_shot=True, fixed_pipeline=True, agent_protocol="fixed-research-agents-v1", agent_run=str(args.agent_run.resolve()))
             if args.research_plan:
                 extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
                 if extension.get("research_plan"):

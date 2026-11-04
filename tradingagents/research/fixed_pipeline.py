@@ -65,7 +65,11 @@ def prepare(snapshot, output):
     if technical["status"] == "ready":
         (root / "candles.svg").write_text(svg(technical), encoding="utf8")
         (root / "weekly-candles.svg").write_text(svg(technical, True), encoding="utf8")
+    from .agent_protocol import start as start_agents
+    start_agents(snapshot, root / "agents", technical=technical)
     state = {
+        "agent_protocol": "fixed-research-agents-v1",
+        "agent_run": "agents",
         "status": "technical_ready_company_review_required"
         if technical["status"] == "ready"
         else "technical_blocked_company_review_required",

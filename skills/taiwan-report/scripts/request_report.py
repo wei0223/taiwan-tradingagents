@@ -53,7 +53,7 @@ def create_request(symbol, repository, output_root, as_of=None, start=None, cloc
         "forecast_mode": "labelled_company_specific_research_assumptions",
         "valuation_mode": "conditional_unless_independently_qualified",
         "source_review_required": True,
-        "upgrade_extension_defaults": {"stock_id": stock, "as_of": cutoff.isoformat(), "one_shot": True, "fixed_pipeline": True},
+        "upgrade_extension_defaults": {"stock_id": stock, "as_of": cutoff.isoformat(), "one_shot": True, "fixed_pipeline": True, "agent_protocol": "fixed-research-agents-v1"},
         "technical_minimum_sessions": 1000,
         "company_sop_version": "company-research-v1",
         "backtest_required": False,

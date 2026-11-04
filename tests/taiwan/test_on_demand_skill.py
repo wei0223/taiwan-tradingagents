@@ -40,7 +40,7 @@ class OnDemandSkillTests(unittest.TestCase):
                 self.assertEqual(record["as_of"], "2026-11-01")
                 self.assertFalse(record["create_or_resume_monitor"])
                 self.assertFalse(record["publish_forecasts"])
-                self.assertEqual(record["upgrade_extension_defaults"], {"stock_id": stock, "as_of": "2026-11-01", "one_shot": True, "fixed_pipeline": True})
+                self.assertEqual(record["upgrade_extension_defaults"], {"stock_id": stock, "as_of": "2026-11-01", "one_shot": True, "fixed_pipeline": True, "agent_protocol": "fixed-research-agents-v1"})
                 self.assertFalse(record["backtest_required"])
                 self.assertTrue(record["source_review_required"])
                 self.assertFalse(Path(record["report_dir"]).exists())

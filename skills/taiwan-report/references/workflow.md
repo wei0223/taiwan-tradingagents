@@ -21,10 +21,10 @@
 基本報告入口為：
 
 ```text
-python -m tradingagents.research upgrade --fixed-pipeline --company-snapshot <本次company-reference.json> --snapshot <本次snapshot.json> --review-input <本次已審原件.json> --analysts <三分析師.json> --extension-input <公司模型.json> --debate-input <實際辯論.json> --output-dir <本次request目錄/report>
+python -m tradingagents.research upgrade --fixed-pipeline --company-snapshot <本次company-reference.json> --snapshot <本次snapshot.json> --review-input <本次已審原件.json> --agent-run <fixed-inputs/agents> --extension-input <公司模型.json> --output-dir <本次request目錄/report>
 ```
 
-這些參數由Codex準備，不要求使用者自行寫JSON。缺資料的選用參數省略並在報告交代，不造假旗標。四季模型與研究計畫採現有 `--research-plan`／extension輸入契約，缺參數時先檢查目前CLI及文件，不猜schema。依目前環境可加 `--pdf-font`。正文可包含程式已算出的精確數字；舊辯論state-machine的無數字敘述限制不適用完整三分析師報告。
+這些參數由Codex準備，不要求使用者自行寫JSON。三分析師、辯論與最終正文只用固定agent-run的已接受輸出；操作依fixed-agents.md，不另寫--analysts、--debate-input或reader_research正文。缺資料的選用參數省略並在報告交代，不造假旗標。四季模型與研究計畫採現有 `--research-plan`／extension輸入契約，缺參數時先檢查目前CLI及文件，不猜schema。依目前環境可加 `--pdf-font`。正文可包含程式已算出的精確數字；舊辯論state-machine的無數字敘述限制不適用完整三分析師報告。
 
 有新官方資料可另查核，但不得回填舊公布日或放寬財務期間／EPS資格檢查。當次分析不能取得的項目標為不可用；報告可以完整交代限制，不必啟動歷史缺口追蹤、正式發布或預測評分。
 

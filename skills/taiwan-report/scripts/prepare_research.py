@@ -36,6 +36,8 @@ def main():
                 v, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
             ).encode()
 
+        if saved.get("agent_protocol") != "fixed-research-agents-v1":
+            raise ValueError("Old preparation has no fixed agent protocol; create a new request")
         technical = json.loads((output / "technical-package.json").read_text("utf8"))
         company = json.loads((output / "company-plan.json").read_text("utf8"))
         if (

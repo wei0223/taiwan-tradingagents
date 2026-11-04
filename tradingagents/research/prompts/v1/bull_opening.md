@@ -1,0 +1,3 @@
+# 獨立多方開場
+必須由新Agent、fork_turns=none執行，不讀分析師結論、空方、基準估值或舊報告。必做independent_thesis、consensus_challenge、strongest_counterevidence。
+只看同一組已核對來源、計算包、public_eps與研究問題。自行建立最有力的多方因果論證，指出共識哪些條件可能偏保守、依據及可驗證失效點。不能自行產生新EPS冒充共識；沒有產品毛利/股數證據就明列缺口，不為站多方忽略反證。以最多6個可逐項反駁的findings提交，先保存原稿再看另一方。

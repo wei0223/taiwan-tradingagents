@@ -1,0 +1,3 @@
+# 最終研究裁決
+必做evidence_comparison、four_axis_ruling、revision_conditions。讀三分析師、雙方反駁及風險審查，正文仍維持三位分析師。
+保留position_before與最終position；stronger_case指出哪個論點因哪些證據較有說服力，key_disagreement寫關鍵分歧，evidence_change寫實際增量。changed_claim_ids只列已接受finding.id；沒有實質改判就留空並解釋，不杜撰改變。rulings同樣分四軸，不把長期好公司直接等同短期好買點。conditions須可用後續公告或同口徑數字判定，但不建立追蹤。不採新聞目標價，預估EPS主值僅public_eps年度中位數。指出未解事項與資料不足造成的結論限制。

@@ -6,9 +6,9 @@
 
 1. request_report建立不可變請求；prepare_data沿用已授權main Sponsor流程，核對run與artifact。
 2. prepare_research讀同一artifact，執行fixed-inputs；不重新dispatch。輸出technical-package、公司計畫、空白輸入契約、查閱指令及雜湊狀態。
-3. Codex依company-plan和company-instructions查官方原件；重用原件須保留原捕獲時間。公司與每家同業分開建檔。company-import驗證後保存不可變SourceStore原件與事實版本；company-audit重新驗證。company-latest僅找舊版本，不證明當期新鮮度。
-4. Codex解釋程式數字，依公司規則建立假設；獨立多空挑戰依既有技能執行。技術論述須綁定technical_package_sha256，未綁定就只列程式結果。
-5. upgrade --fixed-pipeline --company-snapshot <reference>另存報告，產出日／週K、公司原件、固定計算包及可搬移證據包。缺公司快照直接拒絕；允許明列缺口的快照。不得修改舊發布紀錄。
+3. 先完成agents/stages/planner的固定研究規劃及agent-submit，再按動態公司問題、company-plan和company-instructions查官方原件；重用原件須保留原捕獲時間。公司與每家同業分開建檔。company-import驗證後保存不可變SourceStore原件與事實版本；company-audit重新驗證。company-latest僅找舊版本，不證明當期新鮮度。
+4. Codex解釋程式數字，依公司規則建立假設；研究與獨立多空挑戰依fixed-agent-protocol.md的10個固定階段執行。技術論述須綁定technical_package_sha256，未綁定就只列程式結果。
+5. upgrade --fixed-pipeline --company-snapshot <reference> --agent-run <agents>另存報告，產出日／週K、公司原件、固定計算包及可搬移證據包。缺公司快照直接拒絕；允許明列缺口的快照。不得修改舊發布紀錄。
 
 ## 公司資料契約
 

@@ -665,3 +665,5 @@ HTML／PDF 移除舊商數與當前條件模型混用，估值資格分開；
 ### Taiwan fixed research pipeline
 
 On-demand reports can use a versioned 1,000-session technical engine, fixed company-source collection plans, and immutable source-bound company snapshots. See [the fixed pipeline SOP](docs/taiwan/fixed-research-pipeline.md). Install `pip install -r requirements-fixed-research.txt`; use `fixed-inputs`, `company-import`, `company-audit`, then `upgrade --fixed-pipeline --company-snapshot ...`. No paid LLM API or monitoring is required.
+
+Fixed AI research and debate use versioned role prompts, source-bound submissions, and an archived agent run. See [the fixed AI protocol](docs/taiwan/fixed-agent-protocol.md); use `upgrade --agent-run ...` for this on-demand workflow.
