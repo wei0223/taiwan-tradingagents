@@ -240,6 +240,9 @@ def bind(run, company_reference, public_eps=None, review_input=None):
     # Never expose a coordinator's assumptions or unselected vintages to blind researchers.
     evidence = {k: v for k, v in company.items() if k not in ("assumptions", "fact_vintages")}
     add_input(root, state, "company", evidence)
+    from .financial_core import build as financial_calculations
+
+    add_input(root, state, "financial", financial_calculations(company))
     consensus = build(public_eps, state["stock_id"], state["as_of"])
     add_input(root, state, "public_eps", consensus)
     add_input(root, state, "public_eps_input", public_eps or {})
@@ -308,7 +311,7 @@ def prepare_prompt(run, stage):
     keys = (
         ["metadata", "company_plan"]
         if stage == "planner"
-        else ["metadata", "company_plan", "company", "technical", "public_eps", "dynamics"]
+        else ["metadata", "company_plan", "company", "financial", "technical", "public_eps", "dynamics"]
     )
     dependencies = list(DEPENDENCIES[stage])
     request = {
@@ -373,7 +376,7 @@ def reference(ref, root, state, stage):
     allowed = (
         {"metadata", "company_plan"}
         if stage == "planner"
-        else {"company", "technical", "public_eps", "dynamics"}
+        else {"company", "financial", "technical", "public_eps", "dynamics"}
     )
     key, pointer = ref["input_id"], ref["pointer"]
     if key not in allowed or not isinstance(pointer, str) or not pointer.startswith("/"):
@@ -385,6 +388,8 @@ def reference(ref, root, state, stage):
         raise ValueError("Unavailable consensus cannot support a claim")
     if key == "company" and not pointer.startswith("/facts/"):
         raise ValueError("Only selected reviewed facts support company claims")
+    if key == "financial" and not pointer.startswith("/periods/"):
+        raise ValueError("Only period-bound financial calculations support claims")
     if key == "public_eps" and not pointer.startswith("/estimates/"):
         raise ValueError("Only selected public estimates support consensus claims")
     if key == "dynamics" and value.get("status") == "unavailable":
