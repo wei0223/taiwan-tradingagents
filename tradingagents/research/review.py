@@ -268,7 +268,7 @@ def _attempt(function, *args):
         return {"status": "unavailable", "reason": str(exc)}
 
 
-def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, snapshot=None):
+def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, snapshot=None, technical_gate=None):
     """A report always carries four independent axes, including explicit missingness."""
     data = inputs or {}
     now = (clock or (lambda: datetime.now(UTC)))()
@@ -347,10 +347,13 @@ def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, s
         "fair_value": None,
         "reason": "Scenario assumptions do not independently establish cheapness or fair value",
     }
-    trade = (short_review(snapshot, cutoff) if snapshot is not None else short_term) or {
-        "status": "unavailable",
-        "reason": "Complete adjusted bars and calendar required",
-    }
+    if technical_gate is not None and technical_gate.get("status") != "ready":
+        trade = {"status": "unavailable", "reason": "fixed_technical_gate_failed", "technical_status": technical_gate.get("status")}
+    else:
+        trade = (short_review(snapshot, cutoff) if snapshot is not None else short_term) or {
+            "status": "unavailable",
+            "reason": "Complete adjusted bars and calendar required",
+        }
     result = {
         "schema_version": 1,
         "stock_id": stock,

@@ -157,7 +157,11 @@ def package(
     notes, missing_notes = normalize_notes(analyst_prose, stock, as_of)
     source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
     unresolved_refs = set()
-    reviewed = review(stock, as_of, review_input, model, snapshot=snapshot)
+    reviewed = review(stock, as_of, review_input, model, snapshot=snapshot, technical_gate=fixed_technical)
+    if fixed_technical is not None and fixed_technical["status"] != "ready":
+        decision.update(state="observe", current_trade_conclusion_allowed=False, risk_reward=None, risk_reward_reason="fixed_technical_gate_failed")
+        decision["checks"]["price_confirmation"] = False
+        risk_scenarios = []
     from .extension_view import render as render_extension
     from .research_debate import validate as validate_research_debate
     from .research_extension import build as build_extension

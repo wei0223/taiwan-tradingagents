@@ -321,7 +321,9 @@ def render_pdf(directory, font_path):
     judgment = data.get("debate_review", {}).get("judgment", {})
     if ruling_rows(data):
         story += [p(judgment.get("stronger_case", "")), p(judgment.get("evidence_that_changed_judgment", "")), p("改判條件：" + "；".join(judgment.get("revision_conditions", [])), "small")]
-        for direction, claim, response, change in debate_rows(data):
+        material = debate_rows(data, material_only=True)
+        story.append(p("以下只列不同意、未定論或改變立場的交叉回應；完整逐項紀錄見HTML展開區與證據包。" if material else "交叉回應均接受既有條件範圍，沒有實質立場改變；不重複共同限制，完整逐項紀錄見HTML展開區與證據包。", "small"))
+        for direction, claim, response, change in material:
             story += [p(direction + "｜" + change, "h3"), p(claim, "small"), p(response)]
     for row in ed.get("debate_focus", []):
         story += [
