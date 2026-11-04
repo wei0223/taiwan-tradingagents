@@ -87,14 +87,18 @@ def render_pdf(directory, font_path):
     ]
     for item in ed.get("new_insights", []):
         story += [p(item["title"], "h3"), p(item["text"])]
+    from .fixed_reading import debate_rows, ruling_rows
+    rulings = ruling_rows(data)
+    if rulings:
+        story += [p("四項研究裁決", "h2"), table(["判斷軸", "裁決", "依據"], rulings, [30*mm, 20*mm, 130*mm]), p("研究裁決不自動解除財務數值、估值或歷史績效資格；計算資格另見稽核版。", "small")]
     if "public_eps" in data:
         from .public_eps import display_rows
         consensus = data["public_eps"]
         story.append(p("FactSet 共識預估EPS（公開轉引）", "h2"))
         if consensus["estimates"]:
             story.append(table(["財務年度", "EPS中位數（元/股）", "分析師人數", "報導日期", "來源"], display_rows(consensus)))
-            for item in consensus["estimates"]:
-                story.append(p(item["source_title"] + "：" + item["source_url"], "small"))
+            for url in dict.fromkeys(item["source_url"] for item in consensus["estimates"]):
+                story.append(p("公開EPS原文（僅採年度中位數）：" + url, "small"))
             story.append(p(consensus["limitation"], "small"))
         else:
             story.append(p("未取得可核對的公開EPS中位數，不以模型試算補位。"))
@@ -314,6 +318,11 @@ def render_pdf(directory, font_path):
         story.extend(p(x) for x in notes[role]["paragraphs"])
         story.append(p("改判條件：" + "；".join(notes[role]["conditions"]), "small"))
     story += [p("會改變EPS或結論的分歧", "h2")]
+    judgment = data.get("debate_review", {}).get("judgment", {})
+    if ruling_rows(data):
+        story += [p(judgment.get("stronger_case", "")), p(judgment.get("evidence_that_changed_judgment", "")), p("改判條件：" + "；".join(judgment.get("revision_conditions", [])), "small")]
+        for direction, claim, response, change in debate_rows(data):
+            story += [p(direction + "｜" + change, "h3"), p(claim, "small"), p(response)]
     for row in ed.get("debate_focus", []):
         story += [
             p(row["issue"], "h3"),
@@ -342,6 +351,15 @@ def render_pdf(directory, font_path):
                 "small",
             )
         )
+    if (root / "company-package.json").exists():
+        company = json.loads((root / "company-package.json").read_text("utf8"))
+        story.append(p("逐筆數值與引句見證據包 company-evidence.html，對應原件在 company-originals。", "small"))
+        source_index_path = root / "company-source-index.json"
+        source_docs = json.loads(source_index_path.read_text("utf8")) if source_index_path.exists() else {}
+        for key, source in source_docs.items():
+            pages = sorted({str(f["page"]) for f in company["facts"] if f["source_id"] == key})
+            if pages:
+                story.append(p(key + "｜實體頁 " + ",".join(pages) + "｜公布 " + str(source.get("published_at") or "未知") + "｜捕獲 " + source["captured_at"] + "｜SHA256 " + source["sha256"] + "｜" + source["source_url"], "small"))
     story += [
         p(
             "分享時請解壓完整evidence.zip，再開report.html；原件、圖表資料及完整辯論在包內，系統稽核見audit.html。",

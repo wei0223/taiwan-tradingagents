@@ -62,6 +62,11 @@ def render(data, notes, snapshot, table):
     )
     for item in editorial.get("new_insights", []):
         out += "<p><strong>" + esc(item["title"]) + "</strong> " + prose(item["text"]) + "</p>"
+    from .fixed_reading import debate_rows, ruling_rows
+    rulings = ruling_rows(data)
+    if rulings:
+        out += '<h3>四項研究裁決</h3>' + table(["判斷軸", "裁決", "依據"], rulings)
+        out += '<p>研究裁決不自動解除財務數值、估值或歷史績效資格；計算資格另見稽核版。</p>'
     out += (
         "<p>"
         + ('<a href="report.pdf">下載閱讀版 PDF</a> · ' if data.get("reader_pdf_requested") else "")
@@ -268,6 +273,9 @@ def render(data, notes, snapshot, table):
             + "</p>"
         )
     out += "<p>完整開場、逐項反駁與前後立場留在證據包。正文不重複雙方共同接受的限制；有數字影響也不代表該情境更可能。</p></section>"
+    exchanges = debate_rows(data)
+    if exchanges:
+        out += '<section><details><summary>展開本次真實逐項交叉反駁</summary>' + table(["方向", "原主張", "對方回應", "立場結果"], exchanges) + '</details></section>'
     out += (
         '<section id="sources"><h2>資料缺口與可查證來源</h2><p>'
         + prose(
@@ -277,6 +285,8 @@ def render(data, notes, snapshot, table):
         )
         + "</p>"
     )
+    if data.get("fixed_pipeline"):
+        out += '<p><a href="company-evidence.html">逐筆查閱公司原件、數值、期間與PDF頁碼</a> · <a href="company-package.json">制式公司資料</a></p>'
     for key, source in editorial.get("sources", {}).items():
         out += (
             '<p id="source-'
