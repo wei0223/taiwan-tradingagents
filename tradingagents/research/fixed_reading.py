@@ -14,7 +14,7 @@ def ruling_rows(data):
     return [[AXES[r["axis"]], VERDICTS[r["verdict"]], r["reason"]] for r in rows]
 
 
-def debate_rows(data):
+def debate_rows(data, material_only=False):
     debate = data.get("debate_review", {})
     openings, replies = debate.get("openings", {}), debate.get("replies", {})
     result = []
@@ -22,7 +22,7 @@ def debate_rows(data):
         responses = {r["claim_id"]: r for r in replies.get(other, {}).get("changes", [])}
         for claim in openings.get(role, {}).get("claims", []):
             response = responses.get(claim["id"])
-            if response:
+            if response and (not material_only or response["changed_my_position"] or response.get("assessment") in ("dispute", "uncertain")):
                 result.append([label, claim["claim"], response["reason"], "有改變立場" if response["changed_my_position"] else "未改變立場"])
     return result
 

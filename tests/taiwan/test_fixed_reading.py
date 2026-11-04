@@ -18,6 +18,18 @@ class ReadingTests(unittest.TestCase):
         data = {"debate_review": {"openings": {"bull": {"claims": [{"id": "bull.a", "claim": "Growth"}]}}, "replies": {"bear": {"changes": [{"claim_id": "bull.a", "reason": "Costs remain unknown", "changed_my_position": False}]}}}}
         self.assertEqual(debate_rows(data), [["多方主張 → 空方反駁", "Growth", "Costs remain unknown", "未改變立場"]])
 
+    def test_pdf_material_filter_keeps_uncertainty_and_position_changes(self):
+        claims = [{"id": f"bull.{i}", "claim": str(i)} for i in range(4)]
+        changes = [{"claim_id": f"bull.{i}", "reason": str(i), "changed_my_position": i == 3, "assessment": assessment} for i, assessment in enumerate(["accept", "uncertain", "dispute", "accept"])]
+        data = {"debate_review": {"openings": {"bull": {"claims": claims}}, "replies": {"bear": {"changes": changes}}}}
+        self.assertEqual(len(debate_rows(data)), 4)
+        self.assertEqual([r[1] for r in debate_rows(data, material_only=True)], ["1", "2", "3"])
+
+    def test_all_acceptance_does_not_invent_material_disagreement(self):
+        data = {"debate_review": {"openings": {"bull": {"claims": [{"id": "bull.a", "claim": "A"}]}}, "replies": {"bear": {"changes": [{"claim_id": "bull.a", "reason": "Accepted", "assessment": "accept", "changed_my_position": False}]}}}}
+        self.assertEqual(debate_rows(data, material_only=True), [])
+        self.assertEqual(len(debate_rows(data)), 1)
+
     def export(self, root, tamper=False):
         raw = b'<html><script>alert(1)</script>Source</html>'
         sha = hashlib.sha256(raw).hexdigest()
