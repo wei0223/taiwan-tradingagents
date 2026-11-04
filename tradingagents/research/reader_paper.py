@@ -359,7 +359,8 @@ def render_pdf(directory, font_path):
         for key, source in source_docs.items():
             pages = sorted({str(f["page"]) for f in company["facts"] if f["source_id"] == key})
             if pages:
-                story.append(p(key + "｜實體頁 " + ",".join(pages) + "｜公布 " + str(source.get("published_at") or "未知") + "｜捕獲 " + source["captured_at"] + "｜SHA256 " + source["sha256"] + "｜" + source["source_url"], "small"))
+                story.append(p(key + "｜實體頁 " + ",".join(pages) + "｜公布 " + str(source.get("published_at") or "未知") + "｜捕獲 " + source["captured_at"] + "｜SHA256 " + source["sha256"] + "｜" + "完整網址與原件見 company-evidence.html", "small"))
+                story.append(Paragraph('<link href="' + html.escape(source["source_url"], quote=True) + '">開啟官方原件</link>', styles["small"]))
     story += [
         p(
             "分享時請解壓完整evidence.zip，再開report.html；原件、圖表資料及完整辯論在包內，系統稽核見audit.html。",
