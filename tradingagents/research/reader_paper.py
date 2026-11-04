@@ -87,6 +87,17 @@ def render_pdf(directory, font_path):
     ]
     for item in ed.get("new_insights", []):
         story += [p(item["title"], "h3"), p(item["text"])]
+    if "public_eps" in data:
+        from .public_eps import display_rows
+        consensus = data["public_eps"]
+        story.append(p("FactSet 共識預估EPS（公開轉引）", "h2"))
+        if consensus["estimates"]:
+            story.append(table(["財務年度", "EPS中位數（元/股）", "分析師人數", "報導日期", "來源"], display_rows(consensus)))
+            for item in consensus["estimates"]:
+                story.append(p(item["source_title"] + "：" + item["source_url"], "small"))
+            story.append(p(consensus["limitation"], "small"))
+        else:
+            story.append(p("未取得可核對的公開EPS中位數，不以模型試算補位。"))
     story += [p("基本面分析師｜成長與競爭力", "h2")]
     for paragraph in notes["fundamental"]["paragraphs"]:
         story.append(p(paragraph))

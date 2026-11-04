@@ -19,6 +19,7 @@ INSTRUCTIONS = """依company-plan.json逐項建立公司資料。只從官方原
 8. 缺件寫gaps(status/reason)，禁止填零、編造日期、僅勾review旗標冒充查證。
 9. 執行company-import，再company-audit，將所選company-reference.json交給upgrade；不要改來源快照。
 10. 技術分析只讀technical-package.json及固定圖表，不自行補公式或挑選另一套參數。引用technical_sha256。
+11. 預估EPS優先讀公開鉅亨轉引FactSet的年度中位數表；另存public-eps-input.json，不混入公司實績facts。不採新聞目標價或最高最低值作本次預估。
 只有實際看過原件與表格才能填reviewer。程式能核對原文存在，不能自動證明表格語意或公司說法屬實。
 本工作只在本次請求執行，不建立監測、不發布預測、不下單、不呼叫付費LLM API。
 """
@@ -52,6 +53,7 @@ def prepare(snapshot, output):
         ],
     }
     for name, value in [
+        ("public-eps-input-template.json", {"stock_id": company_plan["stock_id"], "as_of": snapshot["as_of"], "sources": {}}),
         ("company-plan.json", company_plan),
         ("company-input-template.json", skeleton),
         ("technical-package.json", technical),

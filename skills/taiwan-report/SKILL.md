@@ -40,7 +40,9 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 為這份報告實際分派獨立多方、空方與風險子Agent：以 `fork_turns=none` 建立新context，開場提示只提供相同原件／計算路徑，不帶既有基準模型數字或另一方結論；各交叉反駁一次，再由風險審查與主Agent裁決。保存真實派工識別、原稿、引用及前後立場。只有工具真的執行後才能聲稱獨立辯論；能力不足時交付受限版本並清楚標記，不假扮多Agent。
 
-前瞻EPS與估值是本次報告的研究內容，不必等待未來實績或先證明預測績效。依公司專屬來源建立四季營收→毛利→營益→歸母→稀釋EPS假設，以既有 financial_model / upgrade 計算。區分已公布事實與未驗證假設，列敏感度與風險。缺足夠分母或期間就保留不可用；未驗證倍數只能稱條件價格，不能升格合理價或共識。沒有校準績效本身不是拒絕交付有標示條件試算的理由。
+預估EPS的主欄位採公開可查的FactSet轉引「年度中位數」，目前支援鉅亨news.cnyes.com、m.cnyes.com、gfemobile.cnyes.com的/news/id/文章。只查公開報導，未授權直接FactSet API；不新增付費服務。先按股票代碼及FactSet/EPS搜尋，開啟原文確認公司、年度、報導時間及中位數表，再保存UTF-8 HTML原始bytes、URL、captured_at、sha256、content_base64至extension-input.public_eps={stock_id,as_of,sources:{id:source}}。模板見fixed-inputs/public-eps-input-template.json。程式直接解析EPS表並保留原件；搜尋摘要、新聞目標價、平均數不能替代中位數。取得不到就明列不可用，不以自建EPS補位。
+
+報導日期不是FactSet更新日，未揭露的共識資料日、各年度人數、幣別及基本/稀釋/調整口徑保留未知。年度EPS不能當NTM、不能拆四季；不把公開轉引冒充直接FactSet授權資料。平均值/高低值/營收/目標價均不作本次主欄位。自建四季模型若有必要，只作有標示的敏感度挑戰，不能寫成FactSet數字。此版未自動用未確認口徑的EPS計算PE。完整規則見docs/taiwan/public-consensus-eps.md。
 
 長期價值、現金持續性與5–20日交易觀察分開。未觸發條件的R值只是情境測量，不是預期報酬；沒有交易優勢證據就如實說明，不為此啟動長期回測專案。
 

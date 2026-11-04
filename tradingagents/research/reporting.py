@@ -185,6 +185,9 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    if (extension_input or {}).get("one_shot"):
+        from .public_eps import build as public_eps
+        result["public_eps"] = public_eps((extension_input or {}).get("public_eps"), stock, as_of)
     if fixed_state is not None:
         result["fixed_pipeline"] = fixed_state
         result["fixed_technical"] = {k: fixed_technical[k] for k in ("status", "engine_version", "history", "input_sha256")}
@@ -724,6 +727,14 @@ def package(
         if fixed_company is not None:
             write_json(output / "company-package.json", fixed_company)
             write_json(output / "company-reference.json", export_company(extension_input["company_snapshot"], output / "company-database"))
+    if "public_eps" in result:
+        from tradingagents.dataflows.taiwan.source_store import SourceStore
+        write_json(output / "public-eps.json", result["public_eps"])
+        store = SourceStore(output / "public-eps-sources")
+        receipts = {}
+        for key, doc in (extension_input or {}).get("public_eps", {}).get("sources", {}).items():
+            receipts[key] = store.capture({**doc, "stock_id": stock, "revision_id": doc["sha256"]})
+        write_json(output / "public-eps-source-receipts.json", receipts)
     write_json(output / "snapshot.json", snapshot)
     write_json(output / "source-snapshot.json", source_snapshot)
     write_json(output / "period-conversion.json", period_audit)

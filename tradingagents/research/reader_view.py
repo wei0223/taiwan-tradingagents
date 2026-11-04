@@ -67,6 +67,9 @@ def render(data, notes, snapshot, table):
         + ('<a href="report.pdf">下載閱讀版 PDF</a> · ' if data.get("reader_pdf_requested") else "")
         + '<a href="evidence.zip">下載完整可攜證據包</a> · <a href="audit.html">開發與來源稽核版</a></p></section>'
     )
+    if "public_eps" in data:
+        from .public_eps import section as consensus_section
+        out += consensus_section(data["public_eps"], table)
     out += '<section id="industry"><h2>基本面分析師｜成長如何轉成每股獲利</h2>'
     for paragraph in notes["fundamental"]["paragraphs"]:
         out += "<p>" + prose(paragraph) + "</p>"
