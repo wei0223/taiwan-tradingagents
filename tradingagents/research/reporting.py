@@ -750,6 +750,8 @@ def package(
         if fixed_company is not None:
             write_json(output / "company-package.json", fixed_company)
             write_json(output / "company-reference.json", export_company(extension_input["company_snapshot"], output / "company-database"))
+            from .fixed_reading import source_index
+            source_index(extension_input["company_snapshot"], output)
     if "public_eps" in result:
         from tradingagents.dataflows.taiwan.source_store import SourceStore
         write_json(output / "public-eps.json", result["public_eps"])
