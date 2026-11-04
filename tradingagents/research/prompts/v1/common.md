@@ -15,3 +15,6 @@ conditions使用可觀察的來源、期間與事件，避免「持續關注」�
 不得呼叫付費LLM API、索取Token、下單、新增服務、發布預測或建立追蹤。只做本次研究。agent_id使用實際派工識別，不自行編造。執行失敗由協調者明列unavailable，不能假扮獨立Agent。實際prompt_sha256由結果模板取得。
 
 請讀本prompt同目錄的result-template.json取得實際prompt_sha256與可填寫契約；渲染指令內output_contract的空白雜湊是佔位，不能當實際雜湊。
+
+引用契約補充：quote 必須是 JSON 字串，逐字使用 Python str(value)，數字不加千分位或四捨五入，布林寫成 True/False 字串。None、陣列、物件不能作證據。每個 finding 的 evidence 必須有1至20筆可用引用；缺證論述留在 gaps、paragraphs 或 unavailable 步驟，不建立空引用 finding。company 引用限 /facts/，financial 限 /periods/，public_eps 限 /estimates/；不可用共識或 blocked 技術包不能以 status 欄位作為證據。
+financial.company_snapshot_sha256 綁完整 company-reference 的 canonical snapshot；inputs/company.json 是移除 assumptions 與 fact_vintages 的選定視圖，state 記錄它的實體 bytes 雜湊，兩者範圍不同。既有封存研究不得因新模板而改寫；需要後續新階段且模板變更時另建研究，不混版。
