@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 research-pdf = ["reportlab"]
+fixed-research = ["TA-Lib==0.8.3", "numpy==2.3.5", "pypdf==6.1.1"]
 dev = [
     "ruff>=0.16",
     "pytest>=8.0",
@@ -52,7 +53,7 @@ include = ["tradingagents*", "cli*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]
-tradingagents = ["assets/*.svg"]
+tradingagents = ["assets/*.svg", "research/prompts/v1/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

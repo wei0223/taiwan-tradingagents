@@ -144,6 +144,11 @@ def render_pdf(directory, font_path):
             if s["quarters"][0]["calculation"]["eps_twd"] is not None
         ]
         values = [r["calculation"]["eps_twd"] for r in q3]
+    one_shot = data.get("report_mode") == "on_demand"
+    if one_shot:
+        q3 = extra["financial_cases"]
+        target_period = "逐季參考"
+        values = [r["calculation"]["eps_twd"] for r in q3]
     hist = extra["valuation"].get("reported_history", {})
     story = [
         p(stock + " 研究摘要儀表板", "title"),
@@ -157,6 +162,9 @@ def render_pdf(directory, font_path):
             "small",
         ),
         p(
+            ("本次單次研究；不發布預測、不評分、不建立追蹤。資料分析日與最後行情日分列；財務沿用已審原件並標明期間。"
+             + ("本次已執行獨立多空、交叉反駁及風險審查。" if debate["independent_agents_executed"] else "本次未執行獨立辯論。"))
+            if one_shot else
             "本版行情已更新至應有最後交易日；財報及各參數仍各列期間與公布時間。前瞻數字是新版本的條件推估，未重新執行獨立Agent辯論，已公布實績不計預測命中。"
             if (extra.get("research_plan", {}).get("context") or {}).get("mode") == "latest_research"
             else "本版重審所列資料截止日的既有證據，不代表產生日期的即時資料。原Agent提交保持原日期，本版新增計算不宣稱已重新辯論。已公布實績不計預測命中。完整原件、模型與辯論另附證據包。"
@@ -166,7 +174,7 @@ def render_pdf(directory, font_path):
         ),
     ]
     publishing = data.get("publishing_quality")
-    if publishing:
+    if publishing and not one_shot:
         market = publishing["latest_market_gate"]
         story += [p("發布資格與資料時效", "h2"),
                   p("發布狀態 " + publishing["publishing_status"] + "；完整估值 " + publishing["full_valuation_status"]),

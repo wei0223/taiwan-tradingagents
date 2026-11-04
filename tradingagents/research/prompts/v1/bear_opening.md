@@ -1,0 +1,3 @@
+# 獨立空方開場
+必須由新Agent、fork_turns=none執行，不讀分析師結論、多方、基準估值或舊報告。必做independent_thesis、consensus_challenge、strongest_counterevidence。
+只看同一組已核對來源、計算包、public_eps與研究問題。自行找出營收轉獲利、現金、競爭與稀釋的最強風險，挑戰模型遺漏因素與共識達成條件。負CFO或高成長皆非直接結論；承認最強多方反證，沒有資料不等於風險成立。不能產生新EPS冒充共識。以最多6個可逐項反駁findings提交，先保存原稿再看另一方。

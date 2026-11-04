@@ -1,5 +1,11 @@
 # Taiwan TradingAgents — 台股資料與 Codex 多 Agent 研究
 
+**目前預設為單次報告：在Codex輸入 `$taiwan-report 2330` 或「研究台股3017」，
+由Codex準備資料、完成基本面／技術面／籌碼面與多空裁決，交付報告後結束。**
+不要求使用者先準備資料包，不自動發布預測、啟動回測或持續追蹤。
+詳見 [單次使用方式](docs/taiwan/on-demand-report.md) 及 [技能原件](skills/taiwan-report/SKILL.md)。
+下方發布與評分功能保留為明確要求時使用的選用路徑，並非產出報告的必要步驟。
+
 新增[前瞻研究發布](docs/taiwan/prospective-publication.md)：`publish-forward` 以實際發布時間
 封存獨立辯論裁決核准的營收／EPS；四季條件模型與主要預測分開，原件bytes可核對並
 沿用 `track-release` 等待同口徑實績。發布不解除估值、缺季EPS或歷史績效限制。
@@ -654,3 +660,10 @@ HTML／PDF 移除舊商數與當前條件模型混用，估值資格分開；
 [原件數值與歷史版本驗收](docs/taiwan/original-vintage-acceptance.md) 加入原文數字與單位驗證、
 完整公告別名對應、可接受的官方歷史版本證明，以及跨次執行的來源冷卻。
 來源快照另輸出可供後續驗證使用的月營收觀測版本；舊日期或可替換檔名不能證明當年內容。
+
+
+### Taiwan fixed research pipeline
+
+On-demand reports can use a versioned 1,000-session technical engine, fixed company-source collection plans, and immutable source-bound company snapshots. See [the fixed pipeline SOP](docs/taiwan/fixed-research-pipeline.md). Install `pip install -r requirements-fixed-research.txt`; use `fixed-inputs`, `company-import`, `company-audit`, then `upgrade --fixed-pipeline --company-snapshot ...`. No paid LLM API or monitoring is required.
+
+Fixed AI research and debate use versioned role prompts, source-bound submissions, and an archived agent run. See [the fixed AI protocol](docs/taiwan/fixed-agent-protocol.md); use `upgrade --agent-run ...` for this on-demand workflow.

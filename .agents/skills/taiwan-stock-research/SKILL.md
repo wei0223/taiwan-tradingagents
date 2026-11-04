@@ -5,6 +5,10 @@ description: 使用已準備的台股資料包，在 Codex 協調多方、空方
 
 # 台股 Codex 研究
 
+單次查股優先路由：使用者只提供股票代碼、要求直接產生報告時，先讀取
+[單次報告技能](../../../skills/taiwan-report/SKILL.md)，完成資料準備與三分析師報告後結束。
+以下內容只適用已準備run directory的舊辯論狀態機；不得以其中先備資料包或禁止前瞻EPS的限制覆蓋單次報告需求。
+
 使用 Python 的 `tradingagents.research` 管理狀態與驗證，Codex 原生子 Agent 執行分析。
 沿用父工作階段的 ChatGPT 登入及模型，不呼叫 OpenAI/其他 LLM API，不讀取登入憑證，
 不新增付費 credits，不因額度或能力不足改用其他供應商。

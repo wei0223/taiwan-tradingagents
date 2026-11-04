@@ -84,6 +84,27 @@ def package(
             raise ValueError("Changed model requires a separate versioned forecast release")
     from .financial_periods import audit as audit_periods, prepare as prepare_periods
 
+    fixed_agents = None
+    if (extension_input or {}).get("agent_protocol"):
+        from .agent_protocol import PROTOCOL, report_inputs as agent_report_inputs
+        if extension_input["agent_protocol"] != PROTOCOL or not extension_input.get("agent_run"):
+            raise ValueError("Fixed research protocol requires an accepted agent run")
+        fixed_agents = agent_report_inputs(extension_input["agent_run"], snapshot, extension_input, review_input)
+        if analyst_prose is not None and fingerprint(analyst_prose) != fingerprint(fixed_agents["analysts"]):
+            raise ValueError("Use accepted fixed-agent analyst outputs, not rewritten notes")
+        analyst_prose = fixed_agents["analysts"]
+        extension_input = copy.deepcopy(extension_input)
+        existing_editorial = extension_input.get("reader_research", {})
+        if set(existing_editorial) - {"stock_id", "as_of"}:
+            raise ValueError("Fixed protocol uses accepted decision text, not an ad-hoc editorial rewrite")
+        decision = fixed_agents["results"]["decision"]
+        extension_input["reader_research"] = {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"],
+            "verdict": ("Mock流程驗收，合成研究與派工紀錄不得作為正式分析。" if fixed_agents["mode"] == "mock" else decision["position"]), "data_note": ("固定協定結構通過；推論仍須依證據評估。" if fixed_agents["status"] == "complete_structure" else "受限研究：部分階段缺證或未完成；限制與原始回覆保存在附件。"),
+            "new_insights": [{"title": "較有力論點", "text": decision["stronger_case"]},
+                             {"title": "關鍵分歧", "text": decision["key_disagreement"]},
+                             {"title": "證據如何影響判斷", "text": decision["evidence_change"]}]}
+        if debate_input is not None:
+            raise ValueError("Fixed agent run already contains its debate; no replacement packet")
     source_snapshot = copy.deepcopy(snapshot)
     snapshot = prepare_periods(snapshot, review_input, extension_input)
     period_audit = audit_periods(source_snapshot, snapshot)
@@ -126,6 +147,13 @@ def package(
             "Explicit illustrative entry/loss assumptions; not fills or guaranteed exits"
         )
     stock, as_of = bundle["stock_id"], bundle["as_of"]
+    fixed_technical = fixed_company = fixed_state = original_analyst_input = None
+    if (extension_input or {}).get("fixed_pipeline") is True:
+        from .fixed_pipeline import report_inputs
+        if not extension_input.get("company_snapshot"):
+            raise ValueError("Fixed pipeline requires a selected company snapshot; import classified gaps rather than bypass the SOP")
+        original_analyst_input = copy.deepcopy(analyst_prose or {})
+        fixed_technical, fixed_company, analyst_prose, fixed_state = report_inputs(source_snapshot, extension_input, analyst_prose)
     notes, missing_notes = normalize_notes(analyst_prose, stock, as_of)
     source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
     unresolved_refs = set()
@@ -135,7 +163,7 @@ def package(
     from .research_extension import build as build_extension
 
     extra = build_extension(snapshot, reviewed, review_input, dynamics, extension_input)
-    debate_review = validate_research_debate(debate_input, stock, snapshot, review_input)
+    debate_review = fixed_agents["debate"] if fixed_agents else validate_research_debate(debate_input, stock, snapshot, review_input)
     sealed = None
     if release_path is not None:
         from .publication import read_release
@@ -178,6 +206,15 @@ def package(
         "orders": False,
     }
     result["generated_at"] = datetime.now(UTC).isoformat()
+    if fixed_agents:
+        result["agent_protocol_review"] = {"protocol": fixed_agents["protocol"], "status": fixed_agents["status"], "semantic_truth_verified": False}
+    if (extension_input or {}).get("one_shot"):
+        from .public_eps import build as public_eps
+        result["public_eps"] = public_eps((extension_input or {}).get("public_eps"), stock, as_of)
+    if fixed_state is not None:
+        result["fixed_pipeline"] = fixed_state
+        result["fixed_technical"] = {k: fixed_technical[k] for k in ("status", "engine_version", "history", "input_sha256")}
+        result["fixed_technical_latest"] = fixed_technical.get("price_series", {}).get("raw", {}).get("latest", {})
     result["financial_period_conversion"] = period_audit
     from .financial_periods import render_section
 
@@ -246,10 +283,19 @@ def package(
     publication = assess_publishing(
         snapshot, result, extension_input, (review_input or {}).get("documents", {})
     )
+    one_shot = (extension_input or {}).get("one_shot") is True
+    result["report_mode"] = "on_demand" if one_shot else "research_review"
     result["publishing_quality"] = publication
     result["publishing_status"] = publication["publishing_status"]
     result["latest_market_gate"] = publication["latest_market_gate"]
     publishing_section = render_publishing(publication, table)
+    if one_shot:
+        publishing_section = (
+            '<section id="publishing-quality"><h2>本次單次研究</h2>'
+            '<p>本次依所列資料日期完成研究，不發布正式預測、不評分、不建立追蹤。'
+            '前瞻數字是明示假設的條件試算；來源與EPS／估值資格檢查仍保留，'
+            '有條件EPS不代表合理價已獲驗證。</p></section>'
+        )
     estimate_section = ""
     if (extension_input or {}).get("forward_estimate"):
         from .forward_estimate import build as build_estimate, render as render_estimate
@@ -369,6 +415,8 @@ def package(
             rows,
         )
         summary += "<p>年度欄為季度稀釋 EPS 加總近似，非經查核年度加權稀釋 EPS。來源報列本益比未核實分母口徑，因此不標為 TTM PE。情境價格不是目標價；報酬風險比若有列示，也僅依明示進場與失效假設計算，並非可執行報價或保證停損。</p>"
+    elif one_shot:
+        summary += '<h2>前瞻 EPS 與條件估值</h2><p>逐季條件計算、參數依據與限制見<a href="#model-appendix">財務模型</a>及基本面分析師正文；不是已校準預測或已驗證合理價。</p>'
     else:
         summary += '<h2>前瞻 EPS 與估值：依資格分級</h2><p>可計算的條件 EPS 與缺項逐季列於上方發布資格表；完整前瞻估值未通過時不給合理價或低估排名。<a href="#publishing-quality">查看條件試算與阻擋原因</a>。</p>'
     summary += "<h2>什麼會改變各項判斷？</h2>" + table(
@@ -619,7 +667,7 @@ def package(
             ],
         )
     # Audit payloads stay in portable attachments, never inline in the reading page.
-    details += '<section class="machine-audit no-print"><h2>完整證據與計算</h2><p><a href="research.json">計算結果</a> · <a href="publishing-quality.json">發布驗收與假設</a> · <a href="delivery-manifest.json">SHA256 清單</a> · <a href="evidence.zip">完整證據包</a>。獨立 Agent 原稿及既有辯論保存在附件，本輪未重新執行辯論。</p></section>'
+    details += '<section class="machine-audit no-print"><h2>完整證據與計算</h2><p><a href="research.json">計算結果</a> · <a href="publishing-quality.json">發布驗收與假設</a> · <a href="delivery-manifest.json">SHA256 清單</a> · <a href="evidence.zip">完整證據包</a>。' + ('本次獨立 Agent 開場、交叉反駁及風險裁決保存在附件。' if debate_review["independent_agents_executed"] else '本次未執行獨立辯論；既有原稿保留原日期，不冒充新執行。') + '</p></section>'
     reading_gap = (
         '<p class="reading-gap">本版尚缺分析師裁決欄位或有未綁定引用；'
         "結構檢查不代表研究論點已被驗證，詳見 reading-review.json。</p>"
@@ -651,6 +699,18 @@ def package(
         + ' · <a href="reading-review.json">閱讀結構檢查</a> · <a href="research.json">完整計算</a>'
         + "。此版面不代表模型或交易策略已有績效證明。</footer></main></body></html>"
     )
+    audit_page = None
+    if one_shot:
+        from .reader_research import build as build_reader
+        from .reader_view import render as render_reader
+
+        result["reader_research"] = build_reader(snapshot, extra, (extension_input or {}).get("reader_research"))
+        result["reader_pdf_requested"] = pdf_font is not None
+        audit_page = page
+        if fixed_technical is not None:
+            result["_technical_package"] = fixed_technical
+        page = render_reader(result, notes, snapshot, table)
+        result.pop("_technical_package", None)
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
@@ -667,6 +727,37 @@ def package(
         target = output / path
         target.parent.mkdir(exist_ok=True)
         target.write_bytes(content)
+    if audit_page is not None:
+        (output / "audit.html").write_text(audit_page, encoding="utf-8")
+        write_json(output / "reader-research.json", result["reader_research"])
+        reader_sources = (extension_input or {}).get("reader_research", {}).get("sources", {})
+        for source in reader_sources.values():
+            target = output / "reader-sources" / (source["sha256"] + ".pdf")
+            target.parent.mkdir(exist_ok=True)
+            raw = base64.b64decode(source["content_base64"], validate=True)
+            if not target.exists():
+                target.write_bytes(raw)
+    if fixed_state is not None:
+        from .company_database import export as export_company, plan as company_plan
+        from .technical_chart import svg
+        write_json(output / "technical-package.json", fixed_technical)
+        write_json(output / "fixed-state.json", fixed_state)
+        write_json(output / "analysts-input.json", original_analyst_input)
+        write_json(output / "company-plan.json", company_plan(stock, as_of, snapshot["instrument"]["exchange"]))
+        if fixed_technical["status"] == "ready":
+            (output / "candles.svg").write_text(svg(fixed_technical), encoding="utf8")
+            (output / "weekly-candles.svg").write_text(svg(fixed_technical, True), encoding="utf8")
+        if fixed_company is not None:
+            write_json(output / "company-package.json", fixed_company)
+            write_json(output / "company-reference.json", export_company(extension_input["company_snapshot"], output / "company-database"))
+    if "public_eps" in result:
+        from tradingagents.dataflows.taiwan.source_store import SourceStore
+        write_json(output / "public-eps.json", result["public_eps"])
+        store = SourceStore(output / "public-eps-sources")
+        receipts = {}
+        for key, doc in (extension_input or {}).get("public_eps", {}).get("sources", {}).items():
+            receipts[key] = store.capture({**doc, "stock_id": stock, "revision_id": doc["sha256"]})
+        write_json(output / "public-eps-source-receipts.json", receipts)
     write_json(output / "snapshot.json", snapshot)
     write_json(output / "source-snapshot.json", source_snapshot)
     write_json(output / "period-conversion.json", period_audit)
@@ -691,7 +782,11 @@ def package(
     write_json(output / "extension.json", extra)
     write_json(output / "extension-input.json", extension_input or {})
     write_json(output / "debate-review.json", debate_review)
-    write_json(output / "debate-input.json", debate_input or {})
+    write_json(output / "debate-input.json", fixed_agents["results"] if fixed_agents else debate_input or {})
+    if fixed_agents:
+        from .agent_protocol import export as export_agents
+        export_agents(extension_input["agent_run"], output / "agent-run")
+        write_json(output / "agent-protocol-review.json", result["agent_protocol_review"])
     write_json(output / "bundle.json", bundle)
     if sealed is not None:
         write_json(output / "forecast-preservation.json", result["forecast_preservation"])
@@ -752,7 +847,10 @@ def package(
     from .delivery import seal
 
     if pdf_font is not None:
-        from .paper_report import render_pdf
+        if one_shot:
+            from .reader_paper import render_pdf
+        else:
+            from .paper_report import render_pdf
 
         render_pdf(output, pdf_font)
     if result["v6_review"].get("schema_version") == 6:
