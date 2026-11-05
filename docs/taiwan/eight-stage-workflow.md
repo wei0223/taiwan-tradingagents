@@ -76,7 +76,7 @@ python -m tradingagents.research upgrade --snapshot <原snapshot> --output-dir <
 
 補查只開放同公司四種固定操作：financial_listing（YYYY）、financial_original（YYYY-Qn、AI1/AIA）、monthly_revenue（YYYY-MM）、capital_current（period/edition為null）。日期不得在截止日之後，財務季/月需已結束。來源限程式內建MOPS/TWSE，不接受任意URL、shell、Token或付費服務；共用ledger冷卻與403/429/限制頁停機規則。
 
-其他IR、FactSet或行情需求目前保留為具體缺口，不能假裝已有任意自主瀏覽器。無合理查詢時空queries附skip_reason，fetch不發HTTP，resolve使用空物件。每個有查詢的disposition固定 `{status:unavailable/no_new_information/captured_pending_review/reviewed,reason}`。
+其他IR、FactSet或行情需求目前保留為具體缺口，不能假裝已有任意自主瀏覽器。無合理查詢時空queries附skip_reason，fetch不發HTTP，resolve使用空物件。HTTP失敗只能unavailable，no_new_information須本批原件bytes與已綁原件完全一致；每個reviewed查詢各自須有對應新版本選定事實，不能借另一筆查詢通關。每個有查詢的disposition固定 `{status:unavailable/no_new_information/captured_pending_review/reviewed,reason}`。
 
 原件捕獲不是數值驗證。只有company-import/audit通過的新公司版本，而且新事實綁定本批captured bytes，才能reviewed。歷史截止前未取得的現今回補原件仍不能穿越日期門檻。新版本清空舊數值review，須明選新的review-input；原始snapshot/技術包/公開EPS不在此輪暗換。
 

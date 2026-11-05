@@ -487,6 +487,32 @@ class EightStageTests(unittest.TestCase):
         self.assertEqual(main(["upgrade", "--snapshot", str(snapshot_path), "--output-dir", str(self.root / "wrong"), "--agent-run", str(run), "--extension-input", str(extension_path)]), 2)
         self.assertFalse((self.root / "wrong").exists())
 
+    def test_failed_capture_cannot_be_closed_as_no_new_information(self):
+        run, *_ = fixture(self.root)
+        through_cross(run)
+        accept(run, "supplement", queries=[query()])
+        w.fetch(run, self.root / "ledger", transport=Transport(403), clock=lambda: NOW)
+        with self.assertRaisesRegex(ValueError, "remain unavailable"):
+            w.resolve(run, {"q1": {"status": "no_new_information", "reason": "失敗不是無變化"}})
+
+    def test_no_new_information_requires_matching_original_bytes(self):
+        run, *_ = fixture(self.root)
+        through_cross(run)
+        accept(run, "supplement", queries=[query()])
+        w.fetch(run, self.root / "ledger", transport=Transport(content=b"unreviewed changed response"), clock=lambda: NOW)
+        with self.assertRaisesRegex(ValueError, "identical known"):
+            w.resolve(run, {"q1": {"status": "no_new_information", "reason": "未核實的旗標"}})
+
+    def test_same_selected_company_version_cannot_be_rebound_as_new_review(self):
+        import base64
+        run, *_ = fixture(self.root)
+        through_cross(run)
+        accept(run, "supplement", queries=[query()])
+        raw = base64.b64decode(company_input()["sources"]["q2"]["content_base64"])
+        w.fetch(run, self.root / "ledger", transport=Transport(content=raw), clock=lambda: NOW)
+        with self.assertRaisesRegex(ValueError, "newly captured"):
+            w.resolve(run, {"q1": {"status": "reviewed", "reason": "其實沒有新版本"}}, self.root / "company-reference.json")
+
 
 def query(**kwargs):
     return {"id": "q1", "issue_id": "pair0", "operation": "monthly_revenue", "period": "2026-10", "edition": None,

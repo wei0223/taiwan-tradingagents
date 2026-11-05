@@ -297,7 +297,13 @@ def core_packet(root, state):
                 context["fact_id"] = fact["id"]
                 context.update({k: fact.get(k) for k in ("metric", "unit", "period_start", "period_end", "basis", "scope", "source_id", "page", "quote")})
                 company = load_json(artifact(root, inputs[key]))
-                context["source_group"] = "company:" + company["receipt_ids"][fact["source_id"]]
+                location = artifact(root, inputs["company_reference"])
+                reference = load_json(location)
+                store_path = Path(reference["source_store"])
+                store = SourceStore(store_path if store_path.is_absolute() else location.parent / store_path)
+                doc = store.receipt(company["receipt_ids"][fact["source_id"]])
+                context.update(raw_source_sha256=doc["sha256"], published_at=doc.get("published_at"), captured_at=doc["captured_at"])
+                context["source_group"] = "company:" + doc["sha256"]
             item["source_context"] = context
     return selected
 
@@ -698,10 +704,20 @@ def resolve(run, decisions, company_reference=None, review_input=None):
     qs = {q["query_id"]: q for q in batch["queries"]}
     if set(decisions) != set(qs):
         raise ValueError("Resolve each query exactly once")
+    initial = state["revisions"][0]["inputs"]
+    old_company = read(artifact(root, initial["company_reference"]))
+    location = artifact(root, initial["company_reference"])
+    original_ref = load_json(location)
+    original_store = SourceStore(location.parent / original_ref["source_store"])
+    known_hashes = {original_store.receipt(rid)["sha256"] for rid in old_company["receipt_ids"].values()}
     for key, row in decisions.items():
         if set(row) != {"status", "reason"} or row["status"] not in {"unavailable", "no_new_information", "captured_pending_review", "reviewed"}:
             raise ValueError("Explicit per-query disposition required")
         text(row["reason"])
+        if qs[key]["status"] == "unavailable" and row["status"] != "unavailable":
+            raise ValueError("A failed capture must remain unavailable")
+        if row["status"] == "no_new_information" and not any(r.get("sha256") in known_hashes for r in qs[key]["receipts"] if r.get("public_capture_verified")):
+            raise ValueError("No-new-information requires identical known original bytes; otherwise keep pending review")
         if row["status"] == "reviewed" and qs[key]["status"] != "captured_pending_review":
             raise ValueError("A failed capture cannot become reviewed evidence")
     reviewed = any(d["status"] == "reviewed" for d in decisions.values())
@@ -709,7 +725,7 @@ def resolve(run, decisions, company_reference=None, review_input=None):
         raise ValueError("Reviewed supplement requires an explicit new qualified company version")
     if company_reference:
         company = read(company_reference)
-        old = load_json(artifact(root, state["revisions"][0]["inputs"]["company"]))
+        old = old_company
         captured = {r.get("sha256") for q in batch["queries"] if decisions[q["query_id"]]["status"] == "reviewed" for r in q["receipts"] if r.get("public_capture_verified")}
         ref_location = Path(company_reference).resolve()
         ref = load_json(ref_location)
@@ -718,6 +734,12 @@ def resolve(run, decisions, company_reference=None, review_input=None):
         new_sources = {k for k, rid in company["receipt_ids"].items() if store.receipt(rid)["sha256"] in captured}
         if fingerprint(company) == fingerprint(old) or not any(f["source_id"] in new_sources for f in company["facts"]):
             raise ValueError("New reviewed facts must bind actual newly captured bytes")
+        for key, row in decisions.items():
+            if row["status"] == "reviewed":
+                query_hashes = {r.get("sha256") for r in qs[key]["receipts"] if r.get("public_capture_verified")}
+                query_sources = {sid for sid, rid in company["receipt_ids"].items() if store.receipt(rid)["sha256"] in query_hashes}
+                if not any(f["source_id"] in query_sources for f in company["facts"]):
+                    raise ValueError("Each reviewed query must bind its own captured original to a selected fact")
         inputs = copy.deepcopy(state["revisions"][0]["inputs"])
         eps = load_json(artifact(root, inputs["public_eps_input"]))
         review = review_input or {}  # An old numeric review cannot qualify revised statement bytes.
