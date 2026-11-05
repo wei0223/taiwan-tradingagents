@@ -71,21 +71,6 @@ DEPENDENCIES = {
     ),
 }
 AXES = ("accounting_earnings", "cash_sustainability", "valuation", "short_term")
-COMMON_FIELDS = {
-    "protocol",
-    "stage",
-    "stock_id",
-    "as_of",
-    "prompt_sha256",
-    "agent_id",
-    "status",
-    "position",
-    "paragraphs",
-    "findings",
-    "steps",
-    "gaps",
-    "conditions",
-}
 
 
 def write_new(path, value, text=False):

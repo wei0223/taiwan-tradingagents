@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from datetime import date
 from html.parser import HTMLParser
@@ -166,10 +165,6 @@ def industry_review(bundle, sources):
             if not any(s.get("dimension") == d for s in accepted)
         ],
     }
-
-
-def content_hash(text):
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def compare_peers(bundle, rows):
