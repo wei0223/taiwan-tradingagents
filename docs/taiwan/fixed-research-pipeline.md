@@ -36,4 +36,4 @@ requirements-fixed-research.txt固定TA-Lib0.8.3、NumPy2.3.5、pypdf6.1.1；引
 
 ## 邊界與升級
 
-舊美股及未開fixed旗標的既有研究入口不變。新單次技能要求fixed旗標；尚未合併main時，遠端流程仍是舊版，本機fixed-inputs會再次嚴格驗收。新程式未合併前不得聲稱Sponsor端已驗證1000日擷取。所有真實API測試須另記run，本輪只用封存資料及Mock驗證。
+目前為台股專用；未開 fixed 旗標的既有台股研究入口保留相容用途，新單次技能要求 fixed 旗標。Sponsor 與本機 fixed-inputs 都須嚴格驗收 1,000 日；是否完成真實擷取須依本次 run 與資料品質判定，不能用封存或 Mock 結果冒充當次實測。原版美股流程已移除，見 [範圍遷移](taiwan-only.md)。

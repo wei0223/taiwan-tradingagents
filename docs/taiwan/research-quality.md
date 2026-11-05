@@ -2,7 +2,7 @@
 
 ## 執行
 
-維持原有 `prepare`、`archive`、`replay`、`evaluate` 與美股流程。新增離線入口：
+維持台股 `prepare`、`archive`、`replay`、`evaluate`；不再保留美股流程。新增離線入口：
 
 ```sh
 python -m tradingagents.research upgrade --snapshot data/3017/snapshot.json --output-dir reports/3017

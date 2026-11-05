@@ -1,7 +1,7 @@
 # 在 Codex 研究台股：FinMind Sponsor + 原生多 Agent
 
 這是独立於上游 TradingAgentsGraph 的入口。Python 取得資料、計算數值及驗證引用；
-Codex 的多方、空方、風險子 Agent 做解釋與辯論，主 Agent 做結論。原版美股 Graph 保留。
+Codex 的多方、空方、風險子 Agent 做解釋與辯論，主 Agent 做結論。目前僅保留台股研究；原版美股 Graph 已移除，見 [台股專用遷移](taiwan-only.md)。
 不使用 OpenAI API Key、不调用原版 LLM client、不下單；仍會使用你的 ChatGPT 方案額度。
 
 ## FinMind Secret 與 GitHub 資料準備
@@ -79,7 +79,7 @@ CLI 最多執行十五分鐘；quota/auth/timeout/failure 保存狀態並停止�
 可以先檢查：`python -m tradingagents.research status --run-dir <run>`。
 程式管理固定階段，但 Codex 的推論及自然語言仍非确定性，也不能保證投資結論正確。
 
-基本面 publication archive／MOPS、官方交易曆、台股原版 LangGraph 接線仍未加入。
+此段為最初接線階段的限制紀錄；目前 MOPS、官方日曆與固定流程請見 [固定 SOP](fixed-research-pipeline.md)。台股研究使用 Codex，不再接入原版 LangGraph。
 資料不完整時仍可進行有限辯論，但最終只能輸出 insufficient_data，不會以缺資料推論股價應跌。
 
 ## 官方參考
