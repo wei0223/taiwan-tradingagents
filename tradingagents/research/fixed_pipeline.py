@@ -25,7 +25,7 @@ INSTRUCTIONS = """依company-plan.json逐項建立公司資料。只從官方原
 """
 
 
-def prepare(snapshot, output):
+def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1"):
     from .technical_chart import svg
 
     root = Path(output)
@@ -65,10 +65,15 @@ def prepare(snapshot, output):
     if technical["status"] == "ready":
         (root / "candles.svg").write_text(svg(technical), encoding="utf8")
         (root / "weekly-candles.svg").write_text(svg(technical, True), encoding="utf8")
-    from .agent_protocol import start as start_agents
+    if agent_protocol == "taiwan-eight-stage-v2":
+        from .eight_stage import start as start_agents
+    elif agent_protocol == "fixed-research-agents-v1":
+        from .agent_protocol import start as start_agents
+    else:
+        raise ValueError("Unknown research protocol")
     start_agents(snapshot, root / "agents", technical=technical)
     state = {
-        "agent_protocol": "fixed-research-agents-v1",
+        "agent_protocol": agent_protocol,
         "agent_run": "agents",
         "status": "technical_ready_company_review_required"
         if technical["status"] == "ready"

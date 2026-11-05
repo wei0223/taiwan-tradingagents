@@ -91,6 +91,25 @@ def render_pdf(directory, font_path):
     rulings = ruling_rows(data)
     if rulings:
         story += [p("四項研究裁決", "h2"), table(["判斷軸", "裁決", "依據"], rulings, [30*mm, 20*mm, 130*mm]), p("研究裁決不自動解除財務數值、估值或歷史績效資格；計算資格另見稽核版。", "small")]
+    if data.get("workflow_review"):
+        from .eight_stage import DIMENSION_LABELS, STATUS_LABELS, evidence_label
+        workflow = data["workflow_review"]
+        story += [p("八階段研究推導", "h2"),
+                  table(["階段", "研究狀態"], [[str(r["number"]) + " " + r["name"], STATUS_LABELS[r["research_status"]]] for r in workflow["phases"]], [135 * mm, 45 * mm]),
+                  p("格式通關不等於事實語意、真實派工或交易優勢已證實；檔案交付另見workflow-delivery.json。", "small")]
+        stances = {"bullish": "偏多", "neutral": "中立", "bearish": "偏空", "uncertain": "不確定", "unavailable": "不可用"}
+        story.append(p("三面向初步裁決" + ("（補查前）" if workflow["active_revision"] else ""), "h3"))
+        for ruling in workflow["dimension_rulings"]:
+            story.append(p(DIMENSION_LABELS[ruling["dimension"]] + "｜" + stances[ruling["stance"]] + "：" + ruling["reason"] + "；分歧：" + ruling["key_disagreement"]))
+        for face in workflow["core"]["faces"]:
+            story += [p(DIMENSION_LABELS[face["dimension"]] + "｜核心主張", "h3"), p(face["claim"] + "；" + face["reason"])]
+            for item in face["items"]:
+                story.append(p({"primary": "主要", "support": "補充", "counter": "反面"}[item["role"]] + "：" + evidence_label(item) + "；相關來源群組：" + item["correlation_group"], "small"))
+        story.append(p("跨面向研究與補查", "h3"))
+        for relation in workflow["cross"]["relations"]:
+            story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
+        decisions = workflow["supplement"]["decisions"]
+        story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
     if "public_eps" in data:
         from .public_eps import display_rows
         consensus = data["public_eps"]

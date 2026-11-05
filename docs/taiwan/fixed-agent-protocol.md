@@ -1,3 +1,5 @@
+> 本文件描述舊v1及既有封存相容契約；新單次研究預設使用[八階段v2](eight-stage-workflow.md)，不改寫舊run。
+
 # 固定 AI 研究與辯論協定 v1
 
 模板位於tradingagents/research/prompts/v1：common加10個角色/階段檔。每個run保存協定、模板指紋、公司/截止日、輸入檔雜湊、依賴輸出雜湊、完整渲染Prompt、結果契約、實際回覆及執行收據。套件安裝也包含模板。

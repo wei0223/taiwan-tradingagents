@@ -195,8 +195,54 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     agent_audit = commands.add_parser("agent-audit", help="Validate every fixed stage without publishing")
     agent_audit.add_argument("--run", type=Path, required=True)
     upgrade.add_argument("--agent-run", type=Path)
+    fixed.add_argument("--agent-protocol", choices=("fixed-research-agents-v1", "taiwan-eight-stage-v2"), default="taiwan-eight-stage-v2")
+    wf_prompt = commands.add_parser("workflow-prompt", help="Render an eight-stage job and exact output contract")
+    wf_prompt.add_argument("--run", type=Path, required=True)
+    wf_prompt.add_argument("--job", required=True)
+    wf_bind = commands.add_parser("workflow-bind", help="Seal reviewed company inputs after the v2 plan")
+    wf_bind.add_argument("--run", type=Path, required=True)
+    wf_bind.add_argument("--company-reference", type=Path, required=True)
+    wf_bind.add_argument("--public-eps", type=Path)
+    wf_bind.add_argument("--review-input", type=Path)
+    wf_submit = commands.add_parser("workflow-submit", help="Accept a v2 job and actual execution receipt")
+    wf_submit.add_argument("--run", type=Path, required=True)
+    wf_submit.add_argument("--job", required=True)
+    wf_submit.add_argument("--result", type=Path, required=True)
+    wf_submit.add_argument("--execution", type=Path, required=True)
+    wf_fetch = commands.add_parser("workflow-fetch", help="Execute one bounded official-source supplement batch")
+    wf_fetch.add_argument("--run", type=Path, required=True)
+    wf_fetch.add_argument("--archive-dir", type=Path, required=True)
+    wf_fetch.add_argument("--live", action="store_true")
+    wf_fetch.add_argument("--abandon-reason", help="Close an interrupted reservation without new requests")
+    wf_resolve = commands.add_parser("workflow-resolve", help="Resolve every supplement; qualified new facts require reanalysis")
+    wf_resolve.add_argument("--run", type=Path, required=True)
+    wf_resolve.add_argument("--decisions", type=Path, required=True)
+    wf_resolve.add_argument("--company-reference", type=Path)
+    wf_resolve.add_argument("--review-input", type=Path)
+    wf_status = commands.add_parser("workflow-status", help="Show eight-stage gates, next jobs and pending supplementation")
+    wf_status.add_argument("--run", type=Path, required=True)
+    wf_audit = commands.add_parser("workflow-audit", help="Revalidate all eight research stages; not proof of delivery or execution")
+    wf_audit.add_argument("--run", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command.startswith("workflow-"):
+            from . import eight_stage as workflow
+            if args.command == "workflow-prompt":
+                result = workflow.prepare_prompt(args.run, args.job)
+            elif args.command == "workflow-bind":
+                result = workflow.bind(args.run, args.company_reference, load_json(args.public_eps) if args.public_eps else None, load_json(args.review_input) if args.review_input else None)
+            elif args.command == "workflow-submit":
+                result = workflow.submit(args.run, args.job, load_json(args.result), load_json(args.execution), raw_result=args.result.read_bytes())
+            elif args.command == "workflow-fetch":
+                result = workflow.abandon_fetch(args.run, args.abandon_reason) if args.abandon_reason else workflow.fetch(args.run, args.archive_dir, live=args.live)
+            elif args.command == "workflow-resolve":
+                result = workflow.resolve(args.run, load_json(args.decisions), args.company_reference, load_json(args.review_input) if args.review_input else None)
+            elif args.command == "workflow-status":
+                result = workflow.status(args.run)
+            else:
+                result = workflow.assemble(args.run)
+            print(json.dumps(result, ensure_ascii=False))
+            return 0
         if args.command == "agent-prompt":
             from .agent_protocol import prepare_prompt
             print(json.dumps(prepare_prompt(args.run, args.stage), ensure_ascii=False))
@@ -217,7 +263,7 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             return 0
         if args.command == "fixed-inputs":
             from .fixed_pipeline import prepare as prepare_fixed
-            result = prepare_fixed(load_json(args.snapshot), args.output_dir)
+            result = prepare_fixed(load_json(args.snapshot), args.output_dir, agent_protocol=args.agent_protocol)
             print(json.dumps(result))
             return 0 if result["technical_status"] == "ready" else 1
         if args.command == "company-latest":
@@ -422,7 +468,11 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                     extension["company_snapshot"] = reference
             if args.agent_run:
                 extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
-                extension.update(one_shot=True, fixed_pipeline=True, agent_protocol="fixed-research-agents-v1", agent_run=str(args.agent_run.resolve()))
+                from tradingagents.dataflows.taiwan.source_store import SourceStore
+                run_protocol = load_json(SourceStore.path(args.agent_run / "state.json"))["protocol"]
+                if run_protocol not in {"fixed-research-agents-v1", "taiwan-eight-stage-v2"} or extension.get("agent_protocol", run_protocol) != run_protocol:
+                    raise ValueError("Report protocol must match the saved agent run")
+                extension.update(one_shot=True, fixed_pipeline=True, agent_protocol=run_protocol, agent_run=str(args.agent_run.resolve()))
             if args.research_plan:
                 extension = extension or {"stock_id": snapshot["instrument"]["stock_id"], "as_of": snapshot["as_of"]}
                 if extension.get("research_plan"):
