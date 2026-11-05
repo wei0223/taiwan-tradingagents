@@ -97,6 +97,10 @@ def render_pdf(directory, font_path):
         story += [p("八階段研究推導", "h2"),
                   table(["階段", "研究狀態"], [[str(r["number"]) + " " + r["name"], STATUS_LABELS[r["research_status"]]] for r in workflow["phases"]], [135 * mm, 45 * mm]),
                   p("格式通關不等於事實語意、真實派工或交易優勢已證實；檔案交付另見workflow-delivery.json。", "small")]
+        stances = {"bullish": "偏多", "neutral": "中立", "bearish": "偏空", "uncertain": "不確定", "unavailable": "不可用"}
+        story.append(p("三面向初步裁決" + ("（補查前）" if workflow["active_revision"] else ""), "h3"))
+        for ruling in workflow["dimension_rulings"]:
+            story.append(p(DIMENSION_LABELS[ruling["dimension"]] + "｜" + stances[ruling["stance"]] + "：" + ruling["reason"] + "；分歧：" + ruling["key_disagreement"]))
         for face in workflow["core"]["faces"]:
             story += [p(DIMENSION_LABELS[face["dimension"]] + "｜核心主張", "h3"), p(face["claim"] + "；" + face["reason"])]
             for item in face["items"]:

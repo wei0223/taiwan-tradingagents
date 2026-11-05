@@ -69,7 +69,7 @@ def dependencies(state, job):
     if job == "planner":
         return []
     if role(job) == "analyst":
-        return ["supplement"] if job.endswith("_update") else ["planner"]
+        return ["planner", dimension(job), "supplement"] if job.endswith("_update") else ["planner"]
     d = dimension(job)
     if d:
         if role(job) == "opening":
@@ -767,7 +767,10 @@ def assemble(run):
     return {"protocol": PROTOCOL, "mode": state["mode"], "stock_id": state["stock_id"], "as_of": state["as_of"],
             "status": status, "semantic_truth_verified": False, "analysts": notes,
             "results": {**results, "decision": compatible_decision},
-            "workflow": {"phases": phases, "active_revision": state["active_revision"], "core": core_packet(root, state),
+            "workflow": {"phases": phases, "active_revision": state["active_revision"],
+                         "dimension_rulings": [{"dimension": d, "revision": 0, "stance": results[d + "_judge"]["stance"],
+                                                "reason": results[d + "_judge"]["payload"]["reason"], "key_disagreement": results[d + "_judge"]["payload"]["key_disagreement"],
+                                                "latest_analysis_stance": results[current(state, d)]["stance"]} for d in DIMENSIONS], "core": core_packet(root, state),
                          "cross": results[current(state, "cross")]["payload"], "supplement": load_json(artifact(root, state["resolution"]))},
             "debate": {"status": "eight_stage_rebuttals_completed" if executed else "limited_not_independently_executed",
                        "independent_agents_executed": executed, "execution_attestation": "Actual dispatch receipts must be checked; metadata does not prove execution",
@@ -861,7 +864,13 @@ def render(workflow):
     body = '<section id="eight-stage"><h2>八階段研究推導</h2><p>通關代表格式與來源引用通過；不等於語意已證實、預測準確或交易有效。</p><ol>'
     for row in workflow["phases"]:
         body += '<li>' + esc(row["name"]) + '：' + esc(STATUS_LABELS[row["research_status"]]) + '</li>'
-    body += '</ol><h3>三面向核心證據</h3>'
+    body += '</ol><h3>三面向初步裁決</h3>'
+    stances = {"bullish": "偏多", "neutral": "中立", "bearish": "偏空", "uncertain": "不確定", "unavailable": "不可用"}
+    for ruling in workflow["dimension_rulings"]:
+        body += '<p>' + esc(DIMENSION_LABELS[ruling["dimension"]]) + '｜' + esc(stances[ruling["stance"]]) + '：' + esc(ruling["reason"]) + '；分歧：' + esc(ruling["key_disagreement"]) + '</p>'
+    if workflow["active_revision"]:
+        body += '<p>以上為補查前初判；最新分析已依新版本重做，最終判斷見四軸裁決。</p>'
+    body += '<h3>三面向核心證據</h3>'
     for face in workflow["core"]["faces"]:
         body += '<p><strong>' + esc(DIMENSION_LABELS[face["dimension"]]) + '</strong>：' + esc(face["claim"]) + '；' + esc(face["reason"]) + '</p>'
         for item in face["items"]:

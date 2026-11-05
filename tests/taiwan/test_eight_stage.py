@@ -110,6 +110,7 @@ class EightStageTests(unittest.TestCase):
         finish(run)
         audit = w.assemble(run)
         self.assertEqual(len(audit["workflow"]["phases"]), 8)
+        self.assertEqual(len(audit["workflow"]["dimension_rulings"]), 3)
         self.assertEqual(len(audit["results"]), 28)
         self.assertEqual(audit["status"], "limited")
         self.assertFalse(audit["debate"]["independent_agents_executed"])
@@ -348,6 +349,8 @@ class EightStageTests(unittest.TestCase):
             w.prepare_prompt(run, "bull_opening")
         for job in w.UPDATES:
             accept(run, job)
+        request = json.loads((run / "jobs/fundamental_update/request.json").read_text("utf8"))
+        self.assertEqual(set(request["dependency_outputs"]), {"planner", "fundamental", "supplement"})
         for job in w.FINAL:
             accept(run, job)
         self.assertEqual((run / "jobs/fundamental/accepted.json").read_bytes(), original)

@@ -16,3 +16,5 @@
 工具或額度不足時保留真實失敗紀錄，kind=unavailable、status/stance=unavailable、findings空、每個必要檢查明列不可用。反駁仍逐筆responses但只能uncertain、changed_my_position=false。依賴、資料不足與語意未知不可冒充complete。沒有可執行能力時交付受限狀態，不假扮多Agent。
 
 沒有補查更新的完整研究共16個新的獨立研究上下文、8次回原Agent反駁；若有合格更新再增加4個新上下文。不要同時超過當前工具額度；不需要付費LLM API、額外服務或長期追蹤。所有原有監測維持暫停。
+
+AI角色可在額度內並行，對同一run的workflow-submit/bind/fetch/resolve須由單一協調者依序執行，避免兩個程序同時改寫state。
