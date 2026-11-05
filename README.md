@@ -8,7 +8,7 @@
 
 > 研究台股 3017
 
-流程依序完成：代碼與上市櫃辨識 → Sponsor 資料擷取 → 固定公司研究計畫 → 官方原件查證 → 1,000 個完整交易日的程式指標 → 公開可核對的 FactSet EPS 轉引 → 固定 AI 研究與辯論 → HTML、可生成時的 PDF、完整證據 ZIP。
+流程依序完成：[資料準備 → 三面向獨立分析 → 分面向多空辯論 → 核心證據萃取 → 跨面向研究 → 受控補查 → 整體辯論與風險 → 裁決及報告](docs/taiwan/eight-stage-workflow.md)。資料包含官方原件、1,000日程式指標與公開可核對的FactSet EPS；輸出HTML、可生成時的PDF與完整證據ZIP。
 
 AI 研究使用目前登入的 Codex；Python 本身不代替 AI 研究。只有資料包、離線驗證或 Mock 通過，不代表已完成真實分析。資料不足時交付受限報告，不補值或強行估價。
 
@@ -46,6 +46,7 @@ FinMind Sponsor Token 通常只放在 GitHub Actions Secret `FINMIND_TOKEN`，�
 | 主題 | 文件 |
 |---|---|
 | 固定公司資料與技術 SOP | [固定流程](docs/taiwan/fixed-research-pipeline.md) |
+| 正式八階段與通關 | [八階段 v2](docs/taiwan/eight-stage-workflow.md) |
 | AI 研究及辯論契約 | [固定 AI 指令](docs/taiwan/fixed-agent-protocol.md) |
 | FactSet EPS 轉引 | [公開共識 EPS](docs/taiwan/public-consensus-eps.md) |
 | 財報期間與版本 | [財務期間](docs/taiwan/financial-periods.md) |

@@ -1,23 +1,18 @@
-# 固定 AI 研究與辯論執行
+# 正式八階段研究執行
 
-這是本次單次報告的必經入口。固定資料準備會建立fixed-inputs/agents，先產生planner的prompt.md、request.json與result-template.json。不要自行重寫角色Prompt，也不要使用舊runner或其他技能的辯論格式。
+新request的protocol為taiwan-eight-stage-v2。先讀儲存庫 docs/taiwan/eight-stage-workflow.md；所有輸出由workflow-prompt生成，不自行改schema或角色Prompt。若恢復的fixed-state明示fixed-research-agents-v1，改讀本目錄fixed-agents-v1.md，不就地改版。
 
-1. 讀agents/stages/planner/prompt.md及result-template.json，由協調者按模板完成研究規劃。保留實際回覆與execution收據（kind=coordinator、agent_id用實際當次執行識別、tool_call_id指實際執行紀錄，不能捏造工具派工）；先agent-submit接受planner，再依plan.questions查原件、候選關係/代碼及同業。規劃候選不當已證實關係。
-2. 完成company-import/audit，取得明選公司版本；公開EPS按既有規則取得。使用agent-bind封存公司、EPS及財務review。公開EPS缺失可不傳，視為不可用；有review必須在此綁定，報告也使用同份。
-3. agent-prompt分別產生fundamental、technical、institutional、bull_opening、bear_opening。三分析師可由協調者按各自固定指令完成；基本面須逐題回應planner問題。多空開場必須實際spawn_agent(fork_turns=none)，只送程式生成的指令檔及其列明資料，不加其他分析師/基準估值或另一方結論。不得依模型名稱自行換付費API。
-4. 每份回覆另存原始JSON，用agent-submit送驗，同時傳execution收據。收據必含{agent_id,prompt_sha256,kind,tool_call_id,evidence_kind:observed_tool_receipt}；新多空/風險派工另加context_mode:fresh。這是依實際工具紀錄保存的協調者證言，不是程式能獨立證明派工。
-5. 雙方開場通過後才產生bull_reply、bear_reply，使用followup_task回原Agent逐項反駁。保存原agent_id、position_before、opponent的每個finding.id，不能省略或多回。收據kind=followup_task。
-6. 雙方反駁完成，才產生risk，由第三個獨立新Agent執行。最後產生decision，由協調者按模板裁決；分會計獲利/現金/估值/短期四軸，列較有力論點、關鍵分歧、證據增量及改判條件。
-7. 執行agent-audit。upgrade帶--fixed-pipeline --company-snapshot <同一版本> --agent-run <agents>，extension使用request的defaults，並提供已綁定的同份public_eps及review。不要再傳--analysts或--debate-input，不另寫reader_research的AI正文。程式直接使用已驗收分析師與最終裁決，完整指令/回覆/收據進證據包。
+1. 資料：按agents/jobs/planner/prompt.md及contract.json完成公司研究計畫，以workflow-submit驗收。按規劃與固定SOP查原件、核期間/原句，company-import/audit後workflow-bind；EPS缺件按不可用。
+2. 三面向：workflow-status取得next_jobs；fundamental、technical、institutional必須各自實際spawn_agent(fork_turns=none)，只送程式生成指令與列明資料。此任務授權這些研究子Agent與後續固定角色；不要為程式開發另派Agent。不得協調者代寫再標成獨立分析。
+3. 分面向辯論：每面向依序完成<dimension>_bull、_bear（各新Agent）、_bull_reply、_bear_reply（followup_task回原Agent逐項反駁）、_judge（另一新Agent）。先保存雙方開場才能交換；不同面向不交換未列明分析。
+4. 核心：core由協調者按固定指令選每面向一個主張及最多三個來源綁定證據點，原件完整保留；不能自己新增主張或湊滿九點。
+5. 交叉：cross派新Agent，只看生成的核心包，核三個面向配對、時間尺度與重大未知。
+6. 補查：supplement按cross產生有界計畫。使用workflow-fetch、共用來源ledger及明確live旗標；一次最多3查詢/9次HTTP，無合理需求就空查詢並說明。查不到逐筆unavailable，原件未複核captured_pending_review。只有company-import/audit新事實通過才workflow-resolve帶新company-reference；程式要求三個<dimension>_update、core_update、cross_update，全部完成才進STEP7。截日時點及來源冷卻不得放寬，中斷先abandon不能重送。
+7. 整體辯論：bull_opening、bear_opening各派新Agent，讀最新核心/交叉/補查，然後回原Agent完成bull_reply、bear_reply，另一新Agent完成risk。所有實際研究依可用並行額度分批，不預先捏造派工ID。
+8. 裁決：decision由協調者按固定契約完成。workflow-audit後upgrade帶--fixed-pipeline、--company-snapshot最新版本、--agent-run及本次request的extension設定；公開EPS與review必須等於綁定版本。不另傳--analysts/--debate-input或自寫reader_research。交付檔案通關看workflow-delivery.json；只有workflow-audit不是檔案完成。
 
-CLI：
-```text
-python -m tradingagents.research agent-prompt --run <agents> --stage <stage>
-python -m tradingagents.research agent-submit --run <agents> --stage <stage> --result <原始回覆.json> --execution <實際執行收據.json>
-python -m tradingagents.research agent-bind --run <agents> --company-reference <公司參照.json> --public-eps <轉引輸入.json> --review-input <財務審查.json>
-python -m tradingagents.research agent-audit --run <agents>
-```
+每筆execution含{agent_id,prompt_sha256,kind,tool_call_id,evidence_kind:observed_tool_receipt}；新角色kind=spawn_agent/context_mode=fresh，回覆kind=followup_task並保留自己原agent_id。ID只能用真實工具回傳，不捏造；工具ID未提供時明示定位限制。這是協調者依工具紀錄保存的證言，不是程式可證明獨立性的密碼學憑證。
 
-缺資料：每個step仍須填unavailable及原因，stage用limited/unavailable；每位分析師/裁判都保存受限回覆。工具不可用或額度不足：不得假扮Agent；kind=unavailable、agent_id=not_dispatched、tool_call_id指真實失敗/能力不足紀錄、status=unavailable、findings空、steps全部unavailable。反駁保留原開場身分；有對方主張但無法執行時，每筆responses只能uncertain、說明無法審查原因、evidence留空且changed_my_position=false，不能假裝已研究。報告保持受限，不宣稱完整獨立辯論。
+工具或額度不足時保留真實失敗紀錄，kind=unavailable、status/stance=unavailable、findings空、每個必要檢查明列不可用。反駁仍逐筆responses但只能uncertain、changed_my_position=false。依賴、資料不足與語意未知不可冒充complete。沒有可執行能力時交付受限狀態，不假扮多Agent。
 
-接受的內容、輸入、指令與收據不可覆寫。模板改變、來源/公司/截止日或EPS變動應另建新研究，不能將新版本塞回舊run。不要重新發布預測、建立追蹤或改舊報告。
+沒有補查更新的完整研究共16個新的獨立研究上下文、8次回原Agent反駁；若有合格更新再增加4個新上下文。不要同時超過當前工具額度；不需要付費LLM API、額外服務或長期追蹤。所有原有監測維持暫停。

@@ -1,3 +1,5 @@
+> 新研究使用八階段v2與references/fixed-agents.md。下文資料傳輸仍適用；凡agent-bind/agent-audit在v2改用workflow-bind/workflow-audit，技術及財務規則不變。舊v1依保存版本執行。
+
 # 單次執行入口
 
 `scripts/project.json` 記錄本機儲存庫及輸出根目錄，request.json 保存本次參數。它們不含任何Secret。套件安裝路徑以目前環境為準，先使用既有依賴，不自動付費。
@@ -10,7 +12,7 @@
 
 這是可續跑入口，不是阻塞等待：遇到`awaiting_run`／`awaiting_workflow_completion`時，隔一段短時間重新執行同一request；最多等待25分鐘且不重送。讀`preparation.json`取得狀態，保留`preparation-history/`。`dispatch_uncertain_do_not_redispatch`也只查既有run，不能手動再按Run；`ambiguous_runs_requires_review`、逾時、缺artifact或損毀下載須先釐清，不能拿最新成功run充數。程式以actor、main SHA、event、前次清單及啟動時間核對；同一時段有多筆符合便停止選擇。每次重新呼叫都驗證請求hash，完成後也驗證snapshot hash。
 
-`data_available`或`data_available_with_workflow_warnings`才表示資料已下載。後者代表工作流程本身未全部通過，必須閱讀`data/audit.json`逐項判斷用途，不宣稱完整成功。主輸入固定為`data/<代碼>-<分析日>/snapshot.json`；`integrated/snapshot.json`是流程內另產生的副本，不能因有兩份而判斷下載失敗。只在同公司、同分析日且捕獲時間對應本次run時採用；財報原件、期間與數值的資格另由研究審查決定。`report_generated=false`在此階段正常，仍需完成下節研究、三Agent與交付，不能停在資料包。
+`data_available`或`data_available_with_workflow_warnings`才表示資料已下載。後者代表工作流程本身未全部通過，必須閱讀`data/audit.json`逐項判斷用途，不宣稱完整成功。主輸入固定為`data/<代碼>-<分析日>/snapshot.json`；`integrated/snapshot.json`是流程內另產生的副本，不能因有兩份而判斷下載失敗。只在同公司、同分析日且捕獲時間對應本次run時採用；財報原件、期間與數值的資格另由研究審查決定。`report_generated=false`在此階段正常，仍需完成下節八階段研究與交付，不能停在資料包。
 
 不要為本機便利讀回GitHub Secret。若使用者另有已配置本機FinMind環境，才可使用本機prepare；不列印Token。只在明示接受既有資料時沿用本機snapshot，不能將舊行情日期改成今天。
 

@@ -86,7 +86,10 @@ def package(
 
     fixed_agents = None
     if (extension_input or {}).get("agent_protocol"):
-        from .agent_protocol import PROTOCOL, report_inputs as agent_report_inputs
+        if extension_input["agent_protocol"] == "taiwan-eight-stage-v2":
+            from .eight_stage import PROTOCOL, report_inputs as agent_report_inputs
+        else:
+            from .agent_protocol import PROTOCOL, report_inputs as agent_report_inputs
         if extension_input["agent_protocol"] != PROTOCOL or not extension_input.get("agent_run"):
             raise ValueError("Fixed research protocol requires an accepted agent run")
         fixed_agents = agent_report_inputs(extension_input["agent_run"], snapshot, extension_input, review_input)
@@ -790,7 +793,10 @@ def package(
     write_json(output / "debate-review.json", debate_review)
     write_json(output / "debate-input.json", fixed_agents["results"] if fixed_agents else debate_input or {})
     if fixed_agents:
-        from .agent_protocol import export as export_agents
+        if fixed_agents["protocol"] == "taiwan-eight-stage-v2":
+            from .eight_stage import export as export_agents
+        else:
+            from .agent_protocol import export as export_agents
         export_agents(extension_input["agent_run"], output / "agent-run")
         write_json(output / "agent-protocol-review.json", result["agent_protocol_review"])
     write_json(output / "bundle.json", bundle)
@@ -828,6 +834,12 @@ def package(
         write_json(output / "current-output-registry.json", result["v6_review"]["current_output_registry"])
     if result.get("forward_estimate"):
         write_json(output / "forward-estimate.json", result["forward_estimate"])
+    if fixed_agents and "workflow" in fixed_agents:
+        from .eight_stage import render as render_workflow
+        result["workflow_review"] = fixed_agents["workflow"]
+        write_json(output / "workflow-review.json", fixed_agents["workflow"])
+        page = page.replace("</body>", render_workflow(fixed_agents["workflow"]) + "</body>")
+        write_json(output / "research.json", result)
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
     write_json(
         output / "manifest.json",
@@ -867,4 +879,17 @@ def package(
                                output/"source-repair"/"attempts", now=result["generated_at"], budget=0)
         write_json(output/"source-repair"/"resolution-run.json", dispositions)
     seal(output)
+    if fixed_agents and "workflow" in fixed_agents:
+        from .delivery import audit_package
+        delivery = audit_package(output)
+        if delivery["status"] != "passed":
+            raise ValueError("Eight-stage report failed portable delivery verification")
+        write_json(output / "workflow-delivery.json", {"status": "passed", "phase": 8,
+            "html": True, "pdf": (output / "report.pdf").exists(), "pdf_requested": pdf_font is not None,
+            "evidence_archive_verified": True, "semantic_truth_verified": False,
+            "files": {name: hashlib.sha256((output / name).read_bytes()).hexdigest()
+                      for name in ("report.html", "report.pdf") if (output / name).exists()}})
+        seal(output)
+        if audit_package(output)["status"] != "passed":
+            raise ValueError("Final eight-stage delivery receipt package failed verification")
     return result

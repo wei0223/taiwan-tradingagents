@@ -32,7 +32,7 @@ version = {attr = "tradingagents.__version__"}
 include = ["tradingagents*"]
 
 [tool.setuptools.package-data]
-tradingagents = ["research/prompts/v1/*.md"]
+tradingagents = ["research/prompts/v1/*.md", "research/prompts/v2/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

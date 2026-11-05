@@ -17,7 +17,10 @@ def main():
     request_path = args.request.resolve()
     if os.name == "nt" and not str(request_path).startswith("\\\\?\\"):
         request_path = Path("\\\\?\\" + str(request_path))
-    json.loads(request_path.read_text("utf8"))
+    request = json.loads(request_path.read_text("utf8"))
+    protocol = request.get("upgrade_extension_defaults", {}).get("agent_protocol", "fixed-research-agents-v1")
+    if protocol not in {"fixed-research-agents-v1", "taiwan-eight-stage-v2"}:
+        raise ValueError("Unknown request protocol")
     root = request_path.parent
     state = json.loads((root / "preparation.json").read_text("utf8"))
     if hashlib.sha256(request_path.read_bytes()).hexdigest() != state[
@@ -36,7 +39,7 @@ def main():
                 v, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
             ).encode()
 
-        if saved.get("agent_protocol") != "fixed-research-agents-v1":
+        if saved.get("agent_protocol") != protocol:
             raise ValueError("Old preparation has no fixed agent protocol; create a new request")
         technical = json.loads((output / "technical-package.json").read_text("utf8"))
         company = json.loads((output / "company-plan.json").read_text("utf8"))
@@ -75,6 +78,8 @@ def main():
             "-m",
             "tradingagents.research",
             "fixed-inputs",
+            "--agent-protocol",
+            protocol,
             "--snapshot",
             str(snapshot),
             "--output-dir",
