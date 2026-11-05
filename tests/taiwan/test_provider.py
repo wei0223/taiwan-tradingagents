@@ -65,7 +65,7 @@ def provider(fixtures=None, publication=False):
 
 class TaiwanProviderTests(unittest.TestCase):
     def setUp(self):
-        # unittest bypasses the upstream pytest conftest; block sockets here too.
+        # unittest bypasses pytest fixtures; block sockets here too.
         for method in ("connect", "connect_ex"):
             guard = patch("socket.socket." + method, side_effect=AssertionError("Network forbidden"))
             guard.start()
@@ -293,11 +293,12 @@ class TaiwanProviderTests(unittest.TestCase):
         self.assertFalse(result.records)
         self.assertIn("duplicate", " ".join(result.warnings))
 
-    def test_original_us_symbols_unchanged(self):
-        from tradingagents.dataflows.symbols import normalize_symbol
-
-        for symbol in ("AAPL", "MSFT", "SPY"):
-            self.assertEqual(normalize_symbol(symbol), symbol)
+    def test_non_taiwan_symbols_rejected_without_network(self):
+        p, transport = provider()
+        for symbol in ("AAPL", "MSFT", "SPY", "BTC-USD"):
+            with self.subTest(symbol=symbol), self.assertRaises(ValueError):
+                p.resolve_symbol(symbol)
+        self.assertEqual(transport.calls, [])
 
 
 if __name__ == "__main__":

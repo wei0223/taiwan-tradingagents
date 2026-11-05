@@ -1,6 +1,6 @@
 # 財務模型、現金品質、交叉質詢與完整交付
 
-正式 `python -m tradingagents.research upgrade` 共用計算核心，保留原美股路徑與既有封存。
+正式 `python -m tradingagents.research upgrade` 共用計算核心，保留台股路徑與既有封存；原版美股路徑已依 [台股專用範圍](taiwan-only.md) 移除。
 這一層增加可計算的研究能力，不自動把條件情境升格成正式預測、合理價或交易訊號。
 
 ## 執行與輸出

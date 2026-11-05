@@ -1,3 +1,5 @@
+> 歷史設計／驗收紀錄：原美股保留要求已被[台股專用範圍](taiwan-only.md) 取代；下列舊路徑及測試數量不代表目前支援清單。
+
 # B. Taiwan Market Data Provider 設計
 
 ## 邊界與分層

@@ -1,3 +1,5 @@
+> 歷史設計／驗收紀錄：原美股保留要求已被[台股專用範圍](taiwan-only.md) 取代；下列舊路徑及測試數量不代表目前支援清單。
+
 # Codex 研究流程驗證（2026-10-14）
 
 開發於 feature/taiwan-market-provider，續用 PR #1，未修改或合併 main。
