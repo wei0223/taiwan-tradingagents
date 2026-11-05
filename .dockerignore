@@ -13,3 +13,9 @@ results
 eval_results
 Dockerfile
 docker-compose.yml
+
+.env.*
+research-data
+research-runs
+reports
+work

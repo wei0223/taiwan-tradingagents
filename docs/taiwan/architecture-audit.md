@@ -1,3 +1,5 @@
+> 歷史盤點：以下描述台股改造前保留的上游架構；目前專案已改為[台股專用](taiwan-only.md)，移除的路徑不再受支援。
+
 # A. 原版架構盤點與風險
 
 盤點日：2026-10-13。實際來源為官方 TauricResearch/TradingAgents，commit

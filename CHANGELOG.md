@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Changes that need action when upgrading are listed under "Upgrading from" in their release.
 
+## [Unreleased] — Taiwan-only scope
+
+- Removed the upstream cross-market LangGraph/LLM/CLI/provider stack and its dedicated tests/assets after the project scope changed to Taiwan stocks only.
+- Kept all Taiwan data, fixed research, reports, source audits and existing release-reader interfaces. Console entry points now invoke the Taiwan research CLI.
+- Core installation now needs only requests and python-dotenv; deterministic technical/PDF packages remain explicit extras. See [migration](docs/taiwan/taiwan-only.md).
+
 ## [0.6.0] — 2026-10-03
 
 HTML reports, a provider per model tier, past decisions settled for every ticker while the analysts work, and company news read while Yahoo's news feed is down.
