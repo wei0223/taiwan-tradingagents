@@ -48,13 +48,18 @@ def result_for(run, job, queries=None):
     if blocked:
         value.update(status="unavailable", stance="unavailable")
     if job == "planner":
-        value["payload"] = {"questions": [{"id": "q1", "question": "利潤如何傳導", "financial_transmission": "營收到現金", "required_sources": ["financial_statement"]}],
+        fixed_questions = value["payload"]["questions"]
+        value["payload"] = {"questions": [*fixed_questions, {"id": "q1", "question": "利潤如何傳導", "financial_transmission": "營收到現金", "required_sources": ["financial_statement"]}],
                             "business_hypotheses": ["待查假說"], "entities": [], "peers": []}
     if kind == "analyst":
         for check in value["payload"]["checks"]:
             check.update(status="unavailable", explanation="合成缺證", evidence=[])
         if d == "fundamental":
-            value["payload"]["answers"] = [{"question_id": "q1", "status": "unavailable", "answer": "缺合格利潤橋接", "evidence": []}]
+            questions = w.result(root, state, "planner")["payload"]["questions"]
+            value["payload"]["answers"] = [
+                {"question_id": q["id"], "status": "unavailable", "answer": "缺合格利潤橋接", "evidence": []}
+                for q in questions
+            ]
     if kind == "reply":
         own, other = (w.result(root, state, j) for j in w.pair(job))
         value["payload"] = {"position_before": own["stance"], "responses": [{"claim_id": f["id"], "assessment": "uncertain", "reason": "合成無法證實", "evidence": [] if blocked else [ref], "changed_my_position": False} for f in other["findings"]]}
@@ -338,6 +343,39 @@ class EightStageTests(unittest.TestCase):
         accept(run, "planner")
         self.assertEqual(w.status(run)["phases"][0]["gate"], "pending")
         self.assertEqual(w.status(run)["next_jobs"], [])
+
+    def test_resume_reuses_identical_result_and_rejects_replacement(self):
+        run, *_ = fixture(self.root)
+        self.assertIn("planner", w.status(run)["accepted_jobs"])
+        value, execution = result_for(run, "planner")
+        self.assertTrue(w.submit(run, "planner", value, execution)["reused"])
+        with self.assertRaisesRegex(ValueError, "Never overwrite"):
+            w.submit(run, "planner", {**value, "summary": "替換"}, execution)
+
+    def test_company_mandatory_question_cannot_be_removed(self):
+        run, *_ = fixture(self.root, bound=False)
+        value, execution = result_for(run, "planner")
+        value["payload"]["questions"].pop(0)
+        with self.assertRaisesRegex(ValueError, "fixed company research"):
+            w.submit(run, "planner", value, execution)
+
+    def test_delivery_failure_leaves_same_destination_reusable(self):
+        from unittest.mock import patch
+
+        from tradingagents.research.reporting import package_agent_delivery
+
+        output = self.root / "report"
+
+        def fail(snapshot, stage):
+            (stage / "report.html").write_text("partial", encoding="utf8")
+            raise ValueError("simulated PDF failure")
+
+        with (
+            patch("tradingagents.research.reporting.package", side_effect=fail),
+            self.assertRaisesRegex(ValueError, "PDF failure"),
+        ):
+            package_agent_delivery({}, output)
+        self.assertFalse(output.exists())
 
     def test_query_budget_and_duplicate_operations_are_rejected(self):
         run, *_ = fixture(self.root)

@@ -89,9 +89,9 @@ def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1"):
     return state
 
 
-def report_inputs(snapshot, extension, prose):
+def report_inputs(snapshot, extension, prose, *, sealed_technical=None):
     """Require AI technical prose to bind the exact program package; otherwise use program text."""
-    technical = build(snapshot)
+    technical = build(snapshot) if sealed_technical is None else sealed_technical
     identity = fingerprint(technical)
     company = read(extension["company_snapshot"]) if extension.get("company_snapshot") else None
     if company and (

@@ -141,7 +141,25 @@ def flow_comparison(market):
         f"兩組下跌率為 {sell_rate:.1%} 與 {other_rate:.1%}，差 {delta:+.1f} 個百分點。"
         if delta is not None else "其中一組沒有觀測，無法比較下跌率。"
     )
+    def trimmed_gap(sample):
+        selling = [r for r in sample if r["foreign"] < 0]
+        other = [r for r in sample if r["foreign"] >= 0]
+        if not selling or not other:
+            return None
+        return 100 * (sum(r["return_pct"] < 0 for r in selling) / len(selling)
+                      - sum(r["return_pct"] < 0 for r in other) / len(other))
+
+    trimmed = [trimmed_gap(rows[1:]), trimmed_gap(rows[:-1])]
+    sign_sensitive = delta is not None and any(
+        gap is None or (gap > 0) - (gap < 0) != (delta > 0) - (delta < 0) for gap in trimmed
+    )
     return {
+        "sample_status": "insufficient_groups" if delta is None else (
+            "small_group" if min(len(foreign_sell), other_days) < 5 else "descriptive"
+        ),
+        "drop_first_gap_pp": trimmed[0],
+        "drop_last_gap_pp": trimmed[1],
+        "sign_sensitive": sign_sensitive,
         "foreign_sell_down_rate": sell_rate,
         "other_down_rate": other_rate,
         "down_rate_gap_pp": delta,
@@ -181,9 +199,10 @@ def answer(relations, company, technical, snapshot):
                     "as_of": snapshot["as_of"], "measurement": measure}
             cross_evidence[method] = {**item, "evidence_id": "CE-" + fingerprint(item)[:20]}
     for relation in relations:
-        if relation["materiality"] == "minor" or relation["relationship"] == "insufficient":
-            continue
         dimensions = set(relation["dimensions"])
+        market_pair = dimensions == {"technical", "institutional"}
+        if not market_pair and (relation["materiality"] == "minor" or relation["relationship"] == "insufficient"):
+            continue
         if dimensions == {"fundamental", "technical"}:
             question = "最近可比的單季稀釋 EPS 如何變化？最新收盤位於多少條短中期均線之下？"
             measures = {"eps": eps, "trend": trend}
@@ -195,7 +214,13 @@ def answer(relations, company, technical, snapshot):
         elif dimensions == {"technical", "institutional"}:
             question = "同一組 20 個交易日內，外資賣超與股價下跌有幾日同時發生？投信淨額方向為何？"
             measures = {"flow": flow}
-            limit = "同日共現只作描述。20 日且分組樣本有限，領先關係與市場共同因素仍待檢驗。"
+            limit = "同日共現只作描述，尚未調整市場基準。"
+            if flow and flow["sample_status"] == "small_group":
+                limit += "至少一組少於 5 日，證據強度低。"
+            if flow and flow["sign_sensitive"]:
+                limit += "移除首日或末日後，方向改變或無法比較。"
+            if flow and flow["sample_status"] == "insufficient_groups":
+                limit += "缺少其中一組交易日，無法比較下跌率。"
         else:
             continue
         observed = []
@@ -223,10 +248,18 @@ def answer(relations, company, technical, snapshot):
         ):
             observed.append("外資淨賣、投信淨買，顯示法人流向分化。")
         missing = [key for key, item in measures.items() if item is None]
+        if market_pair and flow is not None and flow["down_rate_gap_pp"] is None:
+            missing.append("comparison_group")
         answers.append(
             {
                 "id": relation["id"] + ".calculation",
                 "issue_id": relation["id"],
+                "prior_materiality": relation["materiality"],
+                "evidence_strength": (
+                    "unavailable" if not observed else "limited_descriptive"
+                    if market_pair and (missing or flow["sample_status"] != "descriptive" or flow["sign_sensitive"])
+                    else "descriptive" if market_pair else "context_only"
+                ),
                 "question": question,
                 "required_data": list(measures),
                 "method": (

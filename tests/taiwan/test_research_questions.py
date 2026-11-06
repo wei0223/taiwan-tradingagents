@@ -3,10 +3,13 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from tradingagents.research.eight_stage import put, refs, validate_cross_review
+from tradingagents.research.reader_research import build, short_term_check
 from tradingagents.research.research_questions import (
     analyst_paragraphs,
+    answer,
     display_prose,
     eps_comparison,
     flow_comparison,
@@ -132,3 +135,60 @@ class ResearchQuestionsTests(unittest.TestCase):
                     0,
                     [{**ref, "pointer": "/answers/1/answer", "quote": "missing"}],
                 )
+
+    def test_minor_market_relation_runs_low_cost_statistic_with_small_group_flag(self):
+        rows = [{"foreign": -1, "investment_trust": 1, "return_pct": -1},
+                {"foreign": -1, "investment_trust": 1, "return_pct": 1}]
+        rows += [{"foreign": 1, "investment_trust": 1, "return_pct": 1}] * 18
+        market = {"status": "available", "series": rows, "start": "2026-10-05", "end": "2026-11-04",
+                  "price_change_pct": 1, "trust_buy_days": 20, "trust_buy_down_days": 1}
+        relation = {"id": "price.flow", "relationship": "alignment", "materiality": "minor",
+                    "dimensions": ["technical", "institutional"]}
+        with patch("tradingagents.research.research_questions.market_alignment", return_value=market):
+            result = answer([relation], {}, {}, {"as_of": "2026-11-05"})
+        row, = result["answers"]
+        self.assertEqual(row["prior_materiality"], "minor")
+        self.assertEqual(row["evidence_strength"], "limited_descriptive")
+        self.assertTrue(result["flow"]["sign_sensitive"])
+        self.assertEqual(len(row["evidence_ids"]), 1)
+
+    def test_valuation_fallback_uses_only_price_and_explicit_multiple(self):
+        snapshot = {"as_of": "2026-11-05", "instrument": {"stock_id": "1216"},
+                    "datasets": {"TaiwanStockPrice": {"records": [
+                        {"data_date": "2026-11-04", "values": {"close": 80}},
+                        {"data_date": "2026-11-05", "values": {"close": 100}},
+                    ]}}}
+        with patch("tradingagents.research.reader_research.market_alignment", return_value={}):
+            result = build(snapshot, {"financial_cases": []}, {"stock_id": "1216",
+                           "as_of": "2026-11-05", "pe_axes": [20]})
+        reverse = result["reverse"]
+        self.assertEqual(reverse["status"], "conditional_eps_only")
+        self.assertEqual(reverse["rows"], [{"assumed_pe": 20, "required_eps": 4}])
+
+    def test_fixed_short_term_requires_price_volume_and_completed_week(self):
+        raw = {"bars": [{"high": 82}] * 20 + [{"high": 85, "close": 83}],
+               "dates": ["2026-11-06"], "latest": {"VOLUME_RATIO_20": 1.5, "SMA_20": 79}}
+        week = {"dates": ["2026-10-30"], "bars": [{"close": 83}]}
+        technical = {"status": "ready", "price_series": {"raw": raw}, "weekly": {"complete": week}}
+        self.assertEqual(short_term_check(technical)["status"], "waiting_week")
+        week["dates"][-1] = "2026-11-06"
+        self.assertEqual(short_term_check(technical)["status"], "confirmed")
+        raw["latest"]["VOLUME_RATIO_20"] = 1.49
+        self.assertEqual(short_term_check(technical)["status"], "waiting_daily")
+        raw["bars"][-1]["close"] = 78
+        self.assertEqual(short_term_check(technical)["status"], "invalidated")
+
+    def test_earlier_daily_breakout_can_be_confirmed_by_same_week_close(self):
+        from datetime import date, timedelta
+
+        end = date(2026, 11, 6)
+        days = [(end - timedelta(days=21 - i)).isoformat() for i in range(22)]
+        raw = {"bars": [{"high": 82}] * 20 + [{"high": 85, "close": 84}, {"high": 84, "close": 83}],
+               "dates": days, "latest": {"VOLUME_RATIO_20": 1.2, "SMA_20": 79},
+               "indicators": {"VOLUME_RATIO_20": [None] * 20 + [1.6, 1.2]}}
+        week = {"dates": [days[-1]], "bars": [{"close": 83}]}
+        check = short_term_check({"status": "ready", "price_series": {"raw": raw},
+                                  "weekly": {"complete": week}})
+        self.assertEqual(check["status"], "confirmed")
+        self.assertEqual(check["candidate_date"], days[-2])
+        self.assertEqual(check["breakout_level"], 82)

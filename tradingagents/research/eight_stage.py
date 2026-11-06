@@ -275,6 +275,14 @@ def prepare_prompt(run, job):
                "receipt_limitation": "Coordinator attestations; metadata alone does not prove independent execution"}
     if role(job) in {"cross", "supplement"} or job in FINAL:
         request["core_evidence"] = core_packet(root, state)
+    if kind == "cross":
+        from .reader_research import market_alignment
+        from .research_questions import flow_comparison
+
+        flow = flow_comparison(market_alignment(load_json(artifact(root, inputs["source_snapshot"]))))
+        request["market_comparison_preflight"] = (
+            {key: value for key, value in flow.items() if key != "observations"} if flow else None
+        )
     if job == "supplement" or job in FINAL:
         if job in FINAL and state.get("cross_review_required"):
             if not state.get("cross_evidence"):
@@ -292,12 +300,25 @@ def prepare_prompt(run, job):
     if job in FINAL:
         request["supplement_resolution"] = load_json(artifact(root, state["resolution"]))
     body = (TEMPLATES / "common.md").read_text("utf8") + "\n" + (TEMPLATES / (kind + ".md")).read_text("utf8")
+    if kind == "cross":
+        body += "\n用 market_comparison_preflight 的樣本數、視窗敏感度和缺值評估價籌關係的重要性；正式計算引用在後續階段。"
     if "research_questions" in request:
         body += ("\n先用 research_questions 中已計算的答案解決分歧。說明證據支持的方向、程度與期間。"
                  "已回答的部分直接使用，僅對剩餘缺口規劃補查。"
+                 "先看 evidence_strength。小樣本或對視窗敏感只作描述，可維持原判，並交代未採用原因。"
                  "最終辯論與裁決逐項說明採納或質疑的計算結果及原因。"
                  "引用計算時使用 input_id=research_questions、pointer=/answers/陣列索引/answer，"
                  "quote 填原始 answer 全文。有可用計算的最終裁決至少需引用一項。")
+    if dimension(job) == "technical" or job in {"risk", "decision"}:
+        from .reader_research import short_term_check
+
+        request["short_term_check"] = short_term_check(load_json(artifact(root, inputs["technical"])))
+        body += "\n獨立解讀 short_term_check 的價量、完整週與失效欄位。固定觀察與分析師另選條件分列，勿當成下單或策略績效。"
+    if job == "planner":
+        request["required_research"] = load_json(artifact(root, inputs["company_plan"])).get("required_research", [])
+        body += "\n保留 required_research 的各題 ID、原件類別與財務傳導，另加公司專屬問題。"
+    if dimension(job) == "fundamental" and kind == "analyst":
+        body += "\n每題說明原件、財務傳導與最強反證。查不到的原件及欄位，逐題列為 unavailable 或明列剩餘缺口。"
     if kind == "core":
         body += "\n缺乏液冷獨立數字等資料限制列入 gaps。只有方向相反的實證可選為 counter。若有已引用的數字只能界定外推限制，可選 limitation。"
     if "cross_review_ids" in request:
@@ -309,6 +330,8 @@ def prepare_prompt(run, job):
     folder = "jobs/" + job + "/"
     prompt = put(root, folder + "prompt.md", body, raw=True)
     template = contract(state, job, "cross_review_ids" in request)
+    if job == "planner":
+        template["payload"]["questions"] = request["required_research"]
     template["prompt_sha256"] = prompt["sha256"]
     state["prompts"][job] = {"request": put(root, folder + "request.json", request), "prompt": prompt,
                             "contract": put(root, folder + "contract.json", template)}
@@ -545,6 +568,12 @@ def validate(root, state, job, value, execution):
         unique(payload["questions"], "id", 30)
         if not payload["questions"]:
             raise ValueError("Company-specific source plan required")
+        questions = {q["id"]: q for q in payload["questions"]}
+        required = request.get("required_research", [])
+        if required and set(questions) == {q["id"] for q in required} and value["status"] != "unavailable":
+            raise ValueError("Add a company-specific research question")
+        if any(questions.get(q["id"]) != q for q in required):
+            raise ValueError("Keep all fixed company research questions")
         for q in payload["questions"]:
             if set(q) != {"id", "question", "financial_transmission", "required_sources"} or not q["required_sources"]:
                 raise ValueError("Question must identify financial transmission and originals")
@@ -734,15 +763,22 @@ def validate_queries(root, state, payload):
 
 def submit(run, job, value, execution, raw_result=None):
     root, state = load(run)
-    if job not in state["prompts"] or job in state["completed"]:
+    if job not in state["prompts"]:
         raise ValueError("Prepare once and never overwrite accepted research")
-    validate(root, state, job, value, execution)
     if raw_result is None:
         if state["mode"] != "mock":
             raise ValueError("Original model response bytes must be retained")
         raw_result = json.dumps(value, ensure_ascii=False).encode("utf8")
     if not isinstance(raw_result, bytes) or json.loads(raw_result) != value:
         raise ValueError("Original bytes must match the accepted result")
+    if job in state["completed"]:
+        accepted = state["completed"][job]
+        if (value != load_json(artifact(root, accepted["output"]))
+                or execution != load_json(artifact(root, accepted["execution"]))
+                or raw_result != artifact(root, accepted["original"]).read_bytes()):
+            raise ValueError("Never overwrite accepted research")
+        return {"job": job, "status": "accepted", "research_status": value["status"], "reused": True}
+    validate(root, state, job, value, execution)
     folder = "jobs/" + job + "/"
     state["completed"][job] = {"output": put(root, folder + "accepted.json", value),
                                "execution": put(root, folder + "execution.json", execution),
@@ -978,6 +1014,10 @@ def status(run):
     return {"protocol": PROTOCOL, "phases": phase_status(root, state, results), "next_jobs": pending,
             "supplement_capture_required": "supplement" in results and not state["fetch"],
             "supplement_resolution_required": bool(state["fetch"]) and not state["resolution"],
+            "accepted_jobs": list(results),
+            "reusable_prompts": [job for job in pending if job in state["prompts"]],
+            "company_binding_required": "planner" in results and not state["bound"],
+            "delivery_ready": "decision" in results,
             "active_revision": state["active_revision"], "mode": state["mode"]}
 
 
@@ -994,7 +1034,10 @@ def report_inputs(run, snapshot, extension, review_input):
         raise ValueError("Report consensus changed")
     if fingerprint(review_input or {}) != fingerprint(load_json(artifact(root, inputs["review"]))):
         raise ValueError("Report review version changed")
-    return assemble(root)
+    assembled = assemble(root)
+    assembled["company_plan"] = load_json(artifact(root, inputs["company_plan"]))
+    assembled["sealed_technical"] = load_json(artifact(root, inputs["technical"]))
+    return assembled
 
 
 def export(run, destination):

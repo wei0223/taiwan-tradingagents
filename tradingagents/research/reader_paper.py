@@ -90,6 +90,11 @@ def render_pdf(directory, font_path):
     conditions = data.get("debate_review", {}).get("judgment", {}).get("revision_conditions", [])
     if conditions and data.get("workflow_review"):
         story.append(p("優先改判條件｜" + conditions[0], "small"))
+    if reader.get("latest_verified_quarter_end"):
+        story.append(p("最新已核合併單季財務期間截至 " + reader["latest_verified_quarter_end"] + "。", "small"))
+    if reader.get("short_term_check") and data.get("fixed_pipeline"):
+        from .reader_research import short_term_text
+        story.append(p("固定短線觀察｜" + short_term_text(reader["short_term_check"]), "small"))
     for item in ed.get("new_insights", []):
         story += [p(item["title"], "h3"), p(item["text"])]
     from .fixed_reading import debate_rows, ruling_rows
@@ -269,8 +274,15 @@ def render_pdf(directory, font_path):
             ),
             p("無校準情境機率，不改舊封存預測；單季EPS或年度替代值不拿來填TTM。", "small"),
         ]
+    elif rev["status"] == "conditional_eps_only":
+        story.extend([
+            p(rev["price_date"] + " 收盤 " + number(rev["price"]) + " 元。倍數為示意假設，所得為現價所需 EPS。"),
+            table(["假設本益比", "現價所需 EPS（元／股）"],
+                  [[number(row["assumed_pe"]), number(row["required_eps"])] for row in rev["rows"]]),
+            p("營收與毛利率門檻須等合格四季模型。公開年度 EPS 保留原期間及口徑。", "small"),
+        ])
     else:
-        story.append(p("四個連續季度模型尚不足，停止倒推。"))
+        story.append(p("缺少合格價格或模型，倒推暫不可用。"))
     story += [p("技術與籌碼｜價格、成交量、法人同軸", "h2")]
     if data.get("fixed_pipeline"):
         from .technical_chart import drawing

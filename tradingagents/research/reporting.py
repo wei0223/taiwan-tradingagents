@@ -37,6 +37,30 @@ def table(headers, rows):
     )
 
 
+def package_agent_delivery(snapshot, output_dir, *args):
+    """Deliver a sealed run without leaving an incomplete target after rendering errors."""
+    import shutil
+    from uuid import uuid4
+
+    output = Path(output_dir)
+    if output.exists():
+        return package(snapshot, output, *args)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    parent = output.parent.resolve()
+    stage = parent / f".delivery-{uuid4().hex[:12]}"
+    # Use inherited permissions so the report remains readable after a Windows rename.
+    stage.mkdir()
+    try:
+        result = package(snapshot, stage, *args)
+        if output.exists():
+            raise ValueError("Agent delivery target already exists")
+        stage.rename(output)
+        return result
+    finally:
+        if stage.exists() and stage.resolve() == stage:
+            shutil.rmtree(stage)
+
+
 def package(
     snapshot,
     output_dir,
@@ -156,7 +180,10 @@ def package(
         if not extension_input.get("company_snapshot"):
             raise ValueError("Fixed pipeline requires a selected company snapshot; import classified gaps rather than bypass the SOP")
         original_analyst_input = copy.deepcopy(analyst_prose or {})
-        fixed_technical, fixed_company, analyst_prose, fixed_state = report_inputs(source_snapshot, extension_input, analyst_prose)
+        fixed_technical, fixed_company, analyst_prose, fixed_state = report_inputs(
+            source_snapshot, extension_input, analyst_prose,
+            sealed_technical=(fixed_agents or {}).get("sealed_technical"),
+        )
     notes, missing_notes = normalize_notes(analyst_prose, stock, as_of)
     source_entries, evidence_refs, review_assets = prepare_sources(review_input, stock)
     unresolved_refs = set()
@@ -713,7 +740,10 @@ def package(
         from .reader_research import build as build_reader
         from .reader_view import render as render_reader
 
-        result["reader_research"] = build_reader(snapshot, extra, (extension_input or {}).get("reader_research"))
+        result["reader_research"] = build_reader(
+            snapshot, extra, (extension_input or {}).get("reader_research"),
+            technical=fixed_technical, company=fixed_company,
+        )
         result["reader_pdf_requested"] = pdf_font is not None
         audit_page = page
         if fixed_technical is not None:
@@ -756,7 +786,8 @@ def package(
         write_json(output / "technical-package.json", fixed_technical)
         write_json(output / "fixed-state.json", fixed_state)
         write_json(output / "analysts-input.json", original_analyst_input)
-        write_json(output / "company-plan.json", company_plan(stock, as_of, snapshot["instrument"]["exchange"]))
+        sealed_plan = (fixed_agents or {}).get("company_plan")
+        write_json(output / "company-plan.json", sealed_plan or company_plan(stock, as_of, snapshot["instrument"]["exchange"]))
         if fixed_technical["status"] == "ready":
             (output / "candles.svg").write_text(svg(fixed_technical), encoding="utf8")
             (output / "weekly-candles.svg").write_text(svg(fixed_technical, True), encoding="utf8")
