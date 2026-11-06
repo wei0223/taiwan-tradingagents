@@ -324,7 +324,9 @@ class EightStageTests(unittest.TestCase):
         result = package(snapshot, output, extension_input={"stock_id": "3017", "as_of": snapshot["as_of"], "one_shot": True, "fixed_pipeline": True,
             "agent_protocol": w.PROTOCOL, "agent_run": str(run), "agent_report_mode": "mock", "company_snapshot": ref, "public_eps": eps})
         self.assertIn("workflow_review", result)
-        self.assertIn("八階段研究推導", (output / "report.html").read_text("utf8"))
+        page = (output / "report.html").read_text("utf8")
+        self.assertIn("八階段研究推導", page)
+        self.assertIn("優先改判條件", page.split('id="eight-stage"', 1)[0])
         self.assertEqual(json.loads((output / "workflow-delivery.json").read_text("utf8"))["status"], "passed")
         self.assertTrue((output / "agent-run/jobs/core/accepted.json").is_file())
         self.assertTrue((output / "evidence.zip").is_file())
