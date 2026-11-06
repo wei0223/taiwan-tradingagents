@@ -94,6 +94,41 @@ QUESTIONS = {
 }
 
 
+REQUIRED_RESEARCH = {
+    "foundry": [
+        ("process_mix", "先進製程、封裝與利用率如何影響毛利？",
+         "製程組合與利用率→營收及毛利率", ["investor_presentation", "financial_statement"]),
+        ("fab_cost", "資本支出、折舊與指引能否支持獲利延續？",
+         "設備與折舊→毛利、現金", ["cashflow_statement", "investor_presentation"]),
+    ],
+    "odm": [
+        ("server_mix", "伺服器出貨與產品組合是否改善 ODM 營益？",
+         "出貨與組合→收入及營益率", ["investor_presentation", "financial_statement"]),
+        ("working_capital", "擴張如何影響回款、融資與稀釋？",
+         "應收、存貨、付款及股數→現金與EPS", ["cashflow_statement", "eps_note", "capital_event"]),
+    ],
+    "thermal": [
+        ("product_economics", "拆伺服器應用與液冷產品，哪些量、價、毛利有原件？",
+         "出貨、單價與組合→收入與毛利", ["investor_presentation", "annual_report"]),
+        ("capacity_cost", "擴產、利用率及折舊如何影響獲利？有何反證？",
+         "利用率與折舊→毛利率、費用率及現金", ["financial_statement", "cashflow_statement"]),
+    ],
+    "generic": [
+        ("segment_profit", "依公司揭露辨識各事業、轉投資與非控制權益，哪一項解釋營益和歸母的差距？",
+         "分部營收與成本、業外與非控制權益→歸母及EPS", ["annual_report", "financial_statement"]),
+        ("cash_quality", "獲利改善能否支應同期設備支出？最強反證與待核欄位為何？",
+         "營運資金、設備與融資→現金持續性", ["cashflow_statement", "financial_statement"]),
+    ],
+}
+
+
+def required_research(profile):
+    return [
+        {"id": key, "question": question, "financial_transmission": bridge, "required_sources": categories}
+        for key, question, bridge, categories in REQUIRED_RESEARCH.get(profile, REQUIRED_RESEARCH["generic"])
+    ]
+
+
 def plan(stock, as_of, exchange=None):
     if not re.fullmatch(r"\d{4,6}", stock):
         raise ValueError("Invalid stock")
@@ -121,6 +156,7 @@ def plan(stock, as_of, exchange=None):
         "source_categories": list(SOURCE_CATEGORIES),
         "profile": profile,
         "questions": QUESTIONS[profile],
+        "required_research": required_research(profile),
         "numeric_metrics": sorted(
             MONEY_METRICS | SHARE_METRICS | EPS_METRICS | {"product_mix_pct", "capacity_units"}
         ),

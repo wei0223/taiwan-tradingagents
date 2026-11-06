@@ -452,7 +452,7 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             print(json.dumps({'status': result['status']}))
             return 0
         if args.command == "upgrade":
-            from .reporting import package
+            from .reporting import package, package_agent_delivery
 
             snapshot = load_json(args.snapshot)
             extension = load_json(args.extension_input) if args.extension_input else None
@@ -478,7 +478,8 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                 if extension.get("research_plan"):
                     raise ValueError("Supply one research plan only")
                 extension["research_plan"] = load_json(args.research_plan)
-            result = package(snapshot, args.output_dir,
+            deliver = package_agent_delivery if args.agent_run else package
+            result = deliver(snapshot, args.output_dir,
                              load_json(args.model) if args.model else None,
                              load_json(args.industry) if args.industry else None,
                              load_json(args.analysts) if args.analysts else None,

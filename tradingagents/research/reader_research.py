@@ -4,6 +4,7 @@ import base64
 import copy
 import hashlib
 import math
+from datetime import date
 
 from .financial_model import waterfall
 
@@ -231,7 +232,71 @@ def market_alignment(snapshot, window=20):
     }
 
 
-def build(snapshot, extension, spec=None):
+def short_term_check(technical):
+    """A fixed observation rule using the latest completed daily bar."""
+    if not technical or technical.get("status") != "ready":
+        return {"status": "unavailable", "reason": "缺少通過驗收的固定技術資料。"}
+    raw = technical["price_series"]["raw"]
+    bars = raw["bars"]
+    prior = bars[-21:-1]
+    ratio = raw["latest"].get("VOLUME_RATIO_20")
+    invalidation = raw["latest"].get("SMA_20")
+    if len(prior) != 20 or any(v is None or not math.isfinite(v) for v in (ratio, invalidation)):
+        return {"status": "unavailable", "reason": "缺少前 20 日完整行情或量比。"}
+    level = max(row["high"] for row in prior)
+    close = bars[-1]["close"]
+    day = raw["dates"][-1]
+    candidate_day = day
+    price_pass = close > level
+    volume_pass = ratio >= 1.5
+    history = raw.get("indicators", {}).get("VOLUME_RATIO_20", [])
+    dates = raw["dates"]
+    if not (price_pass and volume_pass) and len(history) == len(dates) == len(bars):
+        latest_week = date.fromisoformat(day).isocalendar()[:2]
+        for i in range(len(bars) - 2, 19, -1):
+            if date.fromisoformat(dates[i]).isocalendar()[:2] != latest_week:
+                break
+            candidate_level = max(row["high"] for row in bars[i - 20 : i])
+            candidate_ratio = history[i]
+            if (bars[i]["close"] > candidate_level and candidate_ratio is not None
+                    and math.isfinite(candidate_ratio) and candidate_ratio >= 1.5):
+                candidate_day, level, ratio = dates[i], candidate_level, candidate_ratio
+                price_pass = volume_pass = True
+                break
+    week = technical.get("weekly", {}).get("complete") or {}
+    week_dates = week.get("dates", [])
+    week_date = week_dates[-1] if week_dates else None
+    same_complete_week = bool(week_date and week_date >= day)
+    weekly_close = week["bars"][-1]["close"] if same_complete_week else None
+    weekly_pass = weekly_close > level if weekly_close is not None else None
+    status = (
+        "invalidated" if close < invalidation else "waiting_daily" if not (price_pass and volume_pass)
+        else "waiting_week" if weekly_pass is None else "confirmed" if weekly_pass else "weekly_failed"
+    )
+    return {"status": status, "date": day, "close": close, "candidate_date": candidate_day,
+            "breakout_level": level,
+            "volume_ratio": ratio, "volume_min": 1.5, "invalidation_level": invalidation,
+            "complete_week_date": week_date, "week_close": weekly_close,
+            "price_pass": price_pass, "volume_pass": volume_pass, "weekly_pass": weekly_pass}
+
+
+def short_term_text(check):
+    if check["status"] == "unavailable":
+        return check["reason"]
+    labels = {"invalidated": "收盤跌破 20 日均線", "waiting_daily": "日線價量條件未齊",
+              "waiting_week": "日線通過，等待同週完整週收盤",
+              "weekly_failed": "同週週收未站上門檻", "confirmed": "本次固定觀察條件成立"}
+    return (
+        f"{check['date']}：{labels[check['status']]}。收盤 {check['close']:,.2f} 元，"
+        f"檢查 {check['candidate_date']} 日線須收高於此前 20 日最高價 {check['breakout_level']:,.2f} 元，"
+        f"量比 {check['volume_ratio']:.2f} 倍須達 {check['volume_min']:.2f} 倍"
+        f"（對照前 20 日均量），且同一完整週收盤須高於該價。"
+        f"收盤低於當期 20 日均線 {check['invalidation_level']:,.2f} 元列失效。"
+        "此為單次觀察規則，尚無策略績效驗證。"
+    )
+
+
+def build(snapshot, extension, spec=None, *, technical=None, company=None):
     spec = spec or {}
     if spec and (
         spec.get("stock_id") != snapshot["instrument"]["stock_id"]
@@ -282,6 +347,19 @@ def build(snapshot, extension, spec=None):
         if price
         else {"status": "unavailable", "rows": []}
     )
+    if price and math.isfinite(price) and price > 0 and reverse["status"] != "conditional_equations_only":
+        axes = spec.get("pe_axes", [10, 20, 30])
+        if any(not math.isfinite(pe) or pe <= 0 for pe in axes):
+            raise ValueError("Positive finite PE axis required")
+        reverse.update(status="conditional_eps_only", price=price,
+                       price_date=max(r["data_date"] for r in rows),
+                       rows=[{"assumed_pe": pe, "required_eps": price / pe} for pe in axes])
+    latest_period = max(
+        (fact["period_end"] for fact in (company or {}).get("facts", [])
+         if fact.get("basis") == "single_quarter" and fact.get("scope") == "consolidated"
+         and fact.get("metric") in {"revenue", "gross_profit", "operating_profit", "parent_profit", "diluted_eps"}
+         and fact.get("kind") == "numeric"), default=None
+    )
     editorial = copy.deepcopy(spec)
     for doc in editorial.get("sources", {}).values():
         doc.pop("content_base64", None)
@@ -290,6 +368,8 @@ def build(snapshot, extension, spec=None):
         "stock_id": snapshot["instrument"]["stock_id"],
         "as_of": snapshot["as_of"],
         "reverse": reverse,
+        "short_term_check": short_term_check(technical),
+        "latest_verified_quarter_end": latest_period,
         "market": market_alignment(snapshot),
         "editorial": editorial,
         "financial_qualification_changed": False,
