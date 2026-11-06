@@ -58,6 +58,12 @@ def result_for(run, job, queries=None):
     if kind == "reply":
         own, other = (w.result(root, state, j) for j in w.pair(job))
         value["payload"] = {"position_before": own["stance"], "responses": [{"claim_id": f["id"], "assessment": "uncertain", "reason": "合成無法證實", "evidence": [] if blocked else [ref], "changed_my_position": False} for f in other["findings"]]}
+    request = w.load_json(w.artifact(root, state["prompts"][job]["request"]))
+    if "cross_review_ids" in request:
+        value["payload"]["cross_review"] = [
+            {"evidence_id": eid, "effect": "unchanged", "claim": "合成論點", "reason": "合成檢查"}
+            for eid in request["cross_review_ids"]
+        ]
     if kind == "judge":
         value["payload"] = {"primary_claim_id": None if blocked else d + ".claim", "reason": "合成無法作真實裁決", "key_disagreement": "缺外部實證"}
     if kind == "core":
@@ -74,6 +80,11 @@ def result_for(run, job, queries=None):
         for ruling in value["payload"]["rulings"]:
             ruling.update(verdict="uncertain", reason="合成不足作真實裁決", evidence=[ref])
     if job == "decision":
+        answers = request.get("research_questions", {}).get("answers", [])
+        if answers and answers[0]["status"] != "unavailable":
+            value["findings"][0]["evidence"].append(
+                {"input_id": "research_questions", "pointer": "/answers/0/answer", "quote": answers[0]["answer"]}
+            )
         value["payload"].update(position_before="uncertain", stronger_case="缺實證無法選邊", key_disagreement="缺資料", evidence_change="沒有真實新證據", changed_claim_ids=[])
     execution = {"agent_id": agent, "prompt_sha256": value["prompt_sha256"], "kind": "followup_task" if kind == "reply" else "spawn_agent" if w.fresh(job) else "coordinator",
                  "context_mode": "fresh", "tool_call_id": "mock-only-" + job, "evidence_kind": "mock" if state["mode"] == "mock" else "observed_tool_receipt"}
@@ -118,6 +129,32 @@ class EightStageTests(unittest.TestCase):
         self.assertFalse(audit["workflow"]["phases"][-1]["report_file_verified"])
         w.export(run, self.root / "portable")
         self.assertEqual(w.assemble(self.root / "portable")["workflow"], audit["workflow"])
+
+    def test_frozen_cross_calculation_requires_replies_risk_and_decision(self):
+        from unittest.mock import patch
+
+        run, _, _, _ = fixture(self.root)
+        through_cross(run)
+        accept(run, "supplement")
+        w.fetch(run, run.parent / "ledger")
+        w.resolve(run, {})
+        packet = {"answers": [{"status": "answered", "answer": "Mock result"}], "input_sha256": {},
+                  "cross_evidence_result": [{"evidence_id": "CE-mock"}]}
+        with patch.object(w, "research_questions", return_value=packet) as calculate:
+            for job in w.FINAL:
+                value, execution = result_for(run, job)
+                if job in w.CROSS_REVIEW_JOBS:
+                    valid = value["payload"]["cross_review"]
+                    value["payload"]["cross_review"] = []
+                    with self.assertRaisesRegex(ValueError, "One response"):
+                        w.submit(run, job, value, execution)
+                    value["payload"]["cross_review"] = valid
+                w.submit(run, job, value, execution)
+            review = w.assemble(run)["workflow"]
+        self.assertEqual(calculate.call_count, 1)
+        self.assertTrue(review["calculations_in_final_prompts"])
+        self.assertEqual(set(review["cross_review"]), w.CROSS_REVIEW_JOBS)
+        self.assertTrue(all(entry["execution"]["evidence_kind"] == "mock" for entry in review["cross_review"].values()))
 
     def test_analysis_requires_accepted_plan_and_bound_sources(self):
         run, *_ = fixture(self.root, bound=False)
