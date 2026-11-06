@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from .reader_view import number
+from .research_questions import analyst_paragraphs, conclusion_parts, display_prose, flow_comparison
 
 
 def render_pdf(directory, font_path):
@@ -14,7 +15,7 @@ def render_pdf(directory, font_path):
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Table, TableStyle
 
     root = Path(directory)
     data = json.loads((root / "research.json").read_text(encoding="utf-8"))
@@ -44,7 +45,7 @@ def render_pdf(directory, font_path):
     }
 
     def p(value, style="body"):
-        return Paragraph(html.escape(str(value)), styles[style])
+        return Paragraph(html.escape(display_prose(value)), styles[style])
 
     def table(headers, rows, widths=None):
         t = Table(
@@ -68,6 +69,7 @@ def render_pdf(directory, font_path):
         )
         return t
 
+    conclusions = conclusion_parts(ed.get("verdict", notes["fundamental"]["stronger_case"]))
     story = [
         p(data["stock_id"] + " 投資研究報告", "title"),
         p(
@@ -82,9 +84,12 @@ def render_pdf(directory, font_path):
         ),
         p(ed.get("data_note", "依資料日分析；不代表即時報價。"), "small"),
         p("研究結論", "h2"),
-        p(ed.get("verdict", notes["fundamental"]["stronger_case"])),
+        *(p("• " + part) for part in conclusions[:3]),
         p("本次單次研究，不發布正式預測、不評分、不建立追蹤；條件價格不是合理價。", "small"),
     ]
+    conditions = data.get("debate_review", {}).get("judgment", {}).get("revision_conditions", [])
+    if conditions and data.get("workflow_review"):
+        story.append(p("優先改判條件｜" + conditions[0], "small"))
     for item in ed.get("new_insights", []):
         story += [p(item["title"], "h3"), p(item["text"])]
     from .fixed_reading import debate_rows, ruling_rows
@@ -92,10 +97,15 @@ def render_pdf(directory, font_path):
     if rulings:
         story += [p("四項研究裁決", "h2"), table(["判斷軸", "裁決", "依據"], rulings, [30*mm, 20*mm, 130*mm]), p("研究裁決不自動解除財務數值、估值或歷史績效資格；計算資格另見稽核版。", "small")]
     if data.get("workflow_review"):
-        from .eight_stage import DIMENSION_LABELS, STATUS_LABELS, evidence_label
+        from .eight_stage import (
+            DIMENSION_LABELS,
+            evidence_label,
+            is_grouped_ma_evidence,
+            phase_label,
+        )
         workflow = data["workflow_review"]
         story += [p("八階段研究推導", "h2"),
-                  table(["階段", "研究狀態"], [[str(r["number"]) + " " + r["name"], STATUS_LABELS[r["research_status"]]] for r in workflow["phases"]], [135 * mm, 45 * mm]),
+                  table(["階段", "研究狀態"], [[str(r["number"]) + " " + r["name"], phase_label(r)] for r in workflow["phases"]], [111 * mm, 69 * mm]),
                   p("格式通關不等於事實語意、真實派工或交易優勢已證實；檔案交付另見workflow-delivery.json。", "small")]
         stances = {"bullish": "偏多", "neutral": "中立", "bearish": "偏空", "uncertain": "不確定", "unavailable": "不可用"}
         story.append(p("三面向初步裁決" + ("（補查前）" if workflow["active_revision"] else ""), "h3"))
@@ -103,10 +113,33 @@ def render_pdf(directory, font_path):
             story.append(p(DIMENSION_LABELS[ruling["dimension"]] + "｜" + stances[ruling["stance"]] + "：" + ruling["reason"] + "；分歧：" + ruling["key_disagreement"]))
         for face in workflow["core"]["faces"]:
             story += [p(DIMENSION_LABELS[face["dimension"]] + "｜核心主張", "h3"), p(face["claim"] + "；" + face["reason"])]
+            trend = workflow["calculations"]["trend"] if face["dimension"] == "technical" else None
+            if trend:
+                story.append(p(trend["summary"] + trend["details"], "small"))
             for item in face["items"]:
+                if trend and is_grouped_ma_evidence(item, trend):
+                    continue
                 story.append(p({"primary": "主要", "support": "補充", "counter": "反面"}[item["role"]] + "：" + evidence_label(item) + "；相關來源群組：" + item["correlation_group"], "small"))
+            for limit in face.get("evidence_limitations", []):
+                story.append(p("資料限制｜" + limit["reason"] + " " + evidence_label(limit["item"]), "small"))
         story.append(p("跨面向研究與補查", "h3"))
+        calculations = workflow["calculations"]
+        for item in calculations["cross_evidence_result"]:
+            story.append(p(item["evidence_id"] + "｜" + item["measurement"]["summary"], "small"))
+        if calculations["flow"]:
+            story.append(p("法人原始數值以股保存。每 1,000 股換算 1 張，上列淨額摘要取整張（半值取偶），圖表可保留小數。", "small"))
+        for row in calculations["answers"]:
+            story.extend([p(row["question"], "h3"), p(row["answer"]),
+                          p("、".join(row["evidence_ids"]) + " " + row["limit"], "small")])
+        if calculations["answers"] and not workflow["calculations_in_final_prompts"]:
+            story.append(p("這些計算是在重出版時補做，原辯論使用當時封存的輸入。", "small"))
+        effects = {"strengthen": "增強", "weaken": "削弱", "unchanged": "維持", "indeterminate": "未定"}
+        for row in workflow.get("cross_review", {}).get("decision", {}).get("responses", []):
+            story.append(p("裁決｜" + effects[row["effect"]] + "｜" + row["evidence_id"] + "｜" + row["reason"], "small"))
+        answered = {row["issue_id"] for row in calculations["answers"]}
         for relation in workflow["cross"]["relations"]:
+            if relation["id"] in answered:
+                continue
             story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
         decisions = workflow["supplement"]["decisions"]
         story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
@@ -244,12 +277,21 @@ def render_pdf(directory, font_path):
         technical = json.loads((root / "technical-package.json").read_text(encoding="utf8"))
         story.append(p("固定指標與K線：程式計算", "h3"))
         if technical["status"] == "ready":
-            story.extend([drawing(technical), drawing(technical, weekly=True)])
+            from reportlab.platypus import KeepTogether
+
+            charts = [drawing(technical), drawing(technical, weekly=True)]
+            for chart in charts:
+                chart.scale(0.88, 0.88)
+                chart.width *= 0.88
+                chart.height *= 0.88
+                chart.hAlign = "CENTER"
+            story.append(KeepTogether(charts))
             story.append(p("完整固定參數、1000日指標序列及61項型態在technical-package.json；沒有LLM補算。", "small"))
         else:
             story.append(p("固定歷史或依賴驗收未通過，停止指標與K線；沒有用舊指標或LLM替代。"))
     series = market["series"]
     if series:
+        flow = flow_comparison(market)
         d = Drawing(510, 420)
         for j, (key, label, scale, bars) in enumerate(
             [
@@ -309,7 +351,14 @@ def render_pdf(directory, font_path):
         d.add(String(30, 3, series[0]["date"], fontName="ReaderCJK", fontSize=8))
         d.add(String(430, 3, series[-1]["date"], fontName="ReaderCJK", fontSize=8))
         story += [
-            d,
+            KeepTogether([
+                p("法人與價格的同窗發現", "h3"),
+                p("收盤、成交量與法人淨額共用交易日軸。分組結果見「跨面向研究與補查」。"
+                  if any(item["method"] == "aligned_flow_20" for item in
+                         data.get("workflow_review", {}).get("calculations", {}).get("cross_evidence_result", []))
+                  else flow["summary"]),
+                d,
+            ]) if flow else d,
             p(ed.get("market_interpretation", "淨額和價格是描述性共現，不識別動機或因果。")),
             table(
                 ["收盤區間", "日數", "外資淨額張", "投信淨額張"],
@@ -333,17 +382,19 @@ def render_pdf(directory, font_path):
             ),
         ]
     for role, label in [("technical", "技術面分析師"), ("institutional", "籌碼面分析師")]:
-        story += [p(label, "h3"), p(notes[role]["stronger_case"])]
-        story.extend(p(x) for x in notes[role]["paragraphs"])
+        story.append(p(label, "h3"))
+        story.extend(p(x) for x in analyst_paragraphs(notes[role]))
         story.append(p("改判條件：" + "；".join(notes[role]["conditions"]), "small"))
     story += [p("會改變EPS或結論的分歧", "h2")]
+    if len(conclusions) > 3:
+        story.append(p("裁決詳述", "h3"))
+        story.extend(p(part) for part in conclusions[3:])
     judgment = data.get("debate_review", {}).get("judgment", {})
     if ruling_rows(data):
         story += [p(judgment.get("stronger_case", "")), p(judgment.get("evidence_that_changed_judgment", "")), p("改判條件：" + "；".join(judgment.get("revision_conditions", [])), "small")]
         material = debate_rows(data, material_only=True)
-        story.append(p("以下只列不同意、未定論或改變立場的交叉回應；完整逐項紀錄見HTML展開區與證據包。" if material else "交叉回應均接受既有條件範圍，沒有實質立場改變；不重複共同限制，完整逐項紀錄見HTML展開區與證據包。", "small"))
-        for direction, claim, response, change in material:
-            story += [p(direction + "｜" + change, "h3"), p(claim, "small"), p(response)]
+        if material:
+            story.append(p("逐筆交叉反駁與原始紀錄收錄於 HTML 稽核版及證據包。", "small"))
     for row in ed.get("debate_focus", []):
         story += [
             p(row["issue"], "h3"),

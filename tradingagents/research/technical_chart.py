@@ -2,6 +2,8 @@
 
 import html
 
+from .research_questions import moving_averages
+
 
 def scene(package, weekly=False):
     if package.get("status") != "ready":
@@ -42,9 +44,12 @@ def scene(package, weekly=False):
     span = high - low or 1
 
     def y(p):
-        return 280 - (p - low) / span * 220
+        return 280 - (p - low) / span * 202
 
     text(50, 45, f"價格（元） {low:,.2f}～{high:,.2f}")
+    comparison = moving_averages(package, weekly)
+    if comparison:
+        text(50, 65, f"末期收盤 {comparison['close']:,.2f} 元，低於 {comparison['below']}/{comparison['count']} 條{'週' if weekly else '短中期日'}均線")
     for fraction in (0, 0.5, 1):
         level = low + span * fraction
         line(55, y(level), 945, y(level), "#edf1f4")
@@ -63,9 +68,9 @@ def scene(package, weekly=False):
         )
     for index, (key, color) in enumerate(
         [
-            (("SMA_10" if weekly else "SMA_20"), "#d99221"),
-            (("SMA_20" if weekly else "SMA_60"), "#635ca8"),
-            (("SMA_40" if weekly else "SMA_240"), "#286b9a"),
+            (("SMA_10" if weekly else "SMA_5"), "#d99221"),
+            (("SMA_20" if weekly else "SMA_20"), "#635ca8"),
+            (("SMA_40" if weekly else "SMA_60"), "#286b9a"),
         ]
     ):
         line(440 + index * 160, 42, 465 + index * 160, 42, color)
@@ -77,6 +82,9 @@ def scene(package, weekly=False):
         ]
         if len(points) > 1:
             poly(points, color)
+    if comparison:
+        level = y(comparison["close"])
+        line(x(n - 1) - 12, level, x(n - 1) + 7, level, "#284b63")
     text(50, 310, "成交量（股）")
     maximum = max(b["volume"] for b in bars) or 1
     text(650, 310, f"區間最高量 {maximum:,.0f} 股")

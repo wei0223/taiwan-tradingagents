@@ -87,3 +87,9 @@ python -m tradingagents.research upgrade --snapshot <原snapshot> --output-dir <
 輸入、原件、各revision、提示詞、contract、原始AI回覆、接受版本、實際工具收據、補查與改判均進 `agent-run/`。HTML/PDF顯示八階段摘要、核心證據與交叉研究；`workflow-review.json`記研究通關，`workflow-delivery.json`記實際檔案/雜湊/證據包驗證。
 
 Mock只供軟體驗證，明選mode=mock及agent_report_mode=mock；不能混入正式研究、預測績效或真實派工。沒有合格資料可交付受限報告；沒有真實Agent能力就明列unavailable。新協定仍需真實股票端到端驗收，離線通過不證明研究品質。
+
+## 交叉研究與最終裁決
+
+新研究在補查結案後凍結 `agent-run/supplement/cross-evidence.json`。封存紀錄保存問題、計算時間、輸入雜湊、共用證據 ID、方法與適用限制。同一項外資與股價統計可供不同問題引用，應視為一項證據。期間或口徑不合時，保留缺口。
+
+多方與空方回應、風險審查及裁決逐一提交 `cross_review`。每列填寫證據 ID、受影響的主張、影響方向及理由。角色無法執行時僅能回覆未定。程序驗證只確認欄位與封存對應，研究語意仍須審查。舊流程重出的報告若未使用新統計，標示事後補算。核心證據的 `limitation` 與缺口另列，不計為反向證據。
