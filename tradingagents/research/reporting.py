@@ -706,6 +706,8 @@ def package(
         + ' · <a href="reading-review.json">閱讀結構檢查</a> · <a href="research.json">完整計算</a>'
         + "。此版面不代表模型或交易策略已有績效證明。</footer></main></body></html>"
     )
+    if fixed_agents and "workflow" in fixed_agents:
+        result["workflow_review"] = fixed_agents["workflow"]
     audit_page = None
     if one_shot:
         from .reader_research import build as build_reader
@@ -718,6 +720,10 @@ def package(
             result["_technical_package"] = fixed_technical
         page = render_reader(result, notes, snapshot, table)
         result.pop("_technical_package", None)
+    if "workflow_review" in result:
+        from .eight_stage import render as render_workflow
+
+        page = page.replace("</body>", render_workflow(result["workflow_review"]) + "</body>")
     links = audit_html(page)
     if links["status"] != "passed":
         raise ValueError("Nonportable report")
@@ -834,12 +840,8 @@ def package(
         write_json(output / "current-output-registry.json", result["v6_review"]["current_output_registry"])
     if result.get("forward_estimate"):
         write_json(output / "forward-estimate.json", result["forward_estimate"])
-    if fixed_agents and "workflow" in fixed_agents:
-        from .eight_stage import render as render_workflow
-        result["workflow_review"] = fixed_agents["workflow"]
-        write_json(output / "workflow-review.json", fixed_agents["workflow"])
-        page = page.replace("</body>", render_workflow(fixed_agents["workflow"]) + "</body>")
-        write_json(output / "research.json", result)
+    if "workflow_review" in result:
+        write_json(output / "workflow-review.json", result["workflow_review"])
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
     write_json(
         output / "manifest.json",
