@@ -24,6 +24,8 @@ MONEY_METRICS = {
     "operating_expenses",
     "operating_profit",
     "nonoperating_profit",
+    "investment_income",
+    "noncontrolling_profit",
     "pretax_profit",
     "tax",
     "consolidated_profit",
@@ -367,6 +369,10 @@ def validate(packet):
                     raise ValueError("Basic disclosure text required")
             if row.get("derivation", "direct") != "direct":
                 raise ValueError("Derived values use calculation packets, not raw fact ingestion")
+            if "statement_sign" in row and (
+                metric != "tax" or row["statement_sign"] != "signed_profit_effect"
+            ):
+                raise ValueError("Only explicitly reviewed signed tax effects are supported")
             raw_text = str(row["raw_value"])
             if _normal(raw_text) not in _normal(row["quote"]):
                 raise ValueError("Numeric transcription absent from quote")
