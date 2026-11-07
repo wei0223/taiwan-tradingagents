@@ -101,3 +101,12 @@ Mock只供軟體驗證，明選mode=mock及agent_report_mode=mock；不能混入
 - 缺四季模型時，只用研究截止日前已完成收盤除以示意倍數，列現價所需 EPS。營收與毛利門檻仍以四季模型為前提。公開年度 EPS 保留其口徑。
 - 固定短線觀察檢查最新已完成交易日所屬週的候選日，要求當日收盤高於此前 20 日最高價，且當日成交量至少為此前 20 日均量的 1.5 倍，且同一完整週收盤站上同一價位。最新收盤跌破當期 20 日均線時列失效。分析師自訂條件另外說明。
 - 中斷後沿用同一請求、資料包與 agent-run。用 `workflow-status` 確認已接受工作、可重用提示、公司綁定及待完成階段。只有輸出原始 bytes、結果及執行收據都相同才可重送已接受工作。使用 `upgrade --agent-run` 時，報告先在暫存目錄完成驗收再移入指定的新目錄；渲染失敗可用原指令重試，不必重跑資料或 Agent。
+
+### 公司原件補齊入口
+
+planner 驗收後、workflow-bind 前，執行 company-intake --snapshot 本次snapshot.json --output-dir 新目錄 --archive-dir 共用來源庫 --live。可重複使用 --saved-input 指定已保存原件包。以股票 metadata 建立最近八季官方 AI1 查詢，最新季優先，最多25次請求及8份PDF；沿用來源庫冷卻，403/429立即停止該主機。只接受新輸出目錄。
+
+讀取 review-queue.json 和 source-search.json，按固定公司研究計畫查年報、分部、EPS附註、現金流、募資及更正，並另查公開FactSet。AI逐份核對原文、表頭、頁碼、單季／累計、合併範圍、單位與版本，再產出company-import輸入。下載的原件維持pending，只有查詢後的缺件才unavailable。review-instructions.md固定這些語意審查步驟。一般公司沿用通用研究問題，不能套另一家公司數值。
+
+程式保留原件bytes、SHA256、URL、捕獲時間與官方下載鏈。公布時間未知維持null，以捕獲時間決定可用性。新批次可沿用舊bytes和原擷取時間，語意審查另留實際時間。company-import/audit仍是workflow-bind的前置關卡；沒有足夠的財務欄位時繼續已通過面向的分析。此入口不宣稱歷史初版完整，也不自動將供應商欄位核准為單季。
+稅費抄錄若使用損益表的帶正負號影響金額，審查者須明示 statement_sign=signed_profit_effect；計算核心以負稅費影響除以稅前獲利計有效稅率。既有正數費用口徑沿用原算式。投資收益及非控制權益以各自直接欄位保存，不用歸母占比變動冒充金額變動。

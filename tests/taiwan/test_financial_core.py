@@ -61,6 +61,29 @@ class FinancialCoreTests(unittest.TestCase):
             any("eps" in name for name in build(self.company())["periods"][0]["metrics"])
         )
 
+    def test_signed_tax_expense_and_benefit_keep_their_economic_direction(self):
+        for raw, expected in [("-250", 25), ("100", -10)]:
+            company = self.company()
+            base = company["facts"][0]
+            company["facts"] += [
+                {**base, "id": "pretax", "metric": "pretax_profit", "normalized_value": "1000"},
+                {**base, "id": "tax", "metric": "tax", "normalized_value": raw,
+                 "statement_sign": "signed_profit_effect"},
+            ]
+            metrics = build(company)["periods"][0]["metrics"]
+            self.assertEqual(metrics["effective_tax_rate_pct"]["value"], expected)
+
+    def test_unreviewed_negative_tax_does_not_produce_a_negative_tax_rate(self):
+        company = self.company()
+        base = company["facts"][0]
+        company["facts"] += [
+            {**base, "id": "pretax", "metric": "pretax_profit", "normalized_value": "1000"},
+            {**base, "id": "tax", "metric": "tax", "normalized_value": "-250"},
+        ]
+        metric = build(company)["periods"][0]["metrics"]["effective_tax_rate_pct"]
+        self.assertIsNone(metric["value"])
+        self.assertEqual(metric["reason"], "tax_sign_unverified")
+
     def test_agent_run_binds_program_financial_package(self):
         import json
         import tempfile

@@ -38,19 +38,26 @@ def build(company):
                     reason = "unit_mismatch"
                 elif a["source_sha256"] != b["source_sha256"]:
                     reason = "source_versions_not_proven_compatible"
+                elif (numerator == "tax" and Decimal(a["normalized_value"]) < 0
+                      and a.get("statement_sign") != "signed_profit_effect"):
+                    reason = "tax_sign_unverified"
                 elif Decimal(b["normalized_value"]) == 0:
                     reason = "zero_denominator"
                 else:
-                    value = float(
-                        Decimal(a["normalized_value"]) / Decimal(b["normalized_value"]) * scale
-                    )
+                    amount = Decimal(a["normalized_value"])
+                    if numerator == "tax" and a.get("statement_sign") == "signed_profit_effect":
+                        amount = -amount
+                    value = float(amount / Decimal(b["normalized_value"]) * scale)
                     reason = None
+            definition = f"{numerator}/{denominator}*{scale}"
+            if numerator == "tax" and facts.get("tax", {}).get("statement_sign") == "signed_profit_effect":
+                definition = "-tax/pretax_profit*100 (reviewed signed profit effect)"
             metrics[name] = {
                 "value": value,
                 "status": "available" if value is not None else "unavailable",
                 "reason": reason,
                 "source_fact_ids": [f["id"] for f in pair if f],
-                "definition": f"{numerator}/{denominator}*{scale}",
+                "definition": definition,
             }
         rows.append(
             {
