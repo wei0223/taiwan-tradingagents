@@ -18,6 +18,13 @@ from tradingagents.research.research_questions import (
 
 
 class ResearchQuestionsTests(unittest.TestCase):
+    def test_reading_amount_units_preserve_eps_and_raw_evidence(self):
+        raw = "營收187066761000元，分母5706107000股，EPS1.13元，外資8991798股"
+        rendered = display_prose(raw)
+        self.assertEqual(rendered, "營收1,870.67 億元，分母57.06 億股，EPS1.13元，外資899.18 萬股")
+        self.assertIn("187066761000", raw)
+        self.assertEqual(display_prose(rendered), rendered)
+
     def test_trend_retains_all_levels_and_excludes_long_ma_from_short_count(self):
         indicators = {
             f"SMA_{n}": [value + 1, value]
