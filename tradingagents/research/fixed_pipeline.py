@@ -9,7 +9,7 @@ from .company_database import plan, read
 from .technical_engine import build
 
 INSTRUCTIONS = """依company-plan.json逐項建立公司資料。只從官方原件抄錄，不從既有分析結論倒填事實。
-1. 按年度/季別/月分/來源類別建立有界查閱清單，優先沿用已保存原件，保留實際捕獲時間。
+1. planner通過後先執行 company-intake --snapshot 本次snapshot.json --output-dir 新原件目錄 --archive-dir 共用來源庫 --live；可用--saved-input沿用原件。讀review-queue.json、source-search.json與review-instructions.md，按固定查詢補官方IR年報、法說及公開FactSet。逐類記錄實際查詢後才能標為unavailable。保留實際捕獲時間。
 2. sources每份須含stock_id/category/revision_id/source_url/published_at(未知null)/captured_at/sha256/content_base64。
 3. facts每筆含kind=numeric或company_statement、id、metric、source_id、page、quote、column_label、context_quotes、reviewer、reviewed_at。
 4. numeric另含raw_value、multiplier、unit、period_start、period_end、basis、scope；原始值須出現在quote。

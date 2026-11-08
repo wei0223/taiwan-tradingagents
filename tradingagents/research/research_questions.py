@@ -10,11 +10,22 @@ from .reader_research import market_alignment
 
 
 def display_prose(value):
-    """Round long decimal literals only in the reading layer."""
+    """Format numeric prose for readers while preserving source evidence."""
+    def amount(match):
+        value = Decimal(match[1].replace(",", ""))
+        if abs(value) >= 100000000:
+            return f"{value / 100000000:,.2f} 億{match[2]}"
+        if abs(value) >= 10000:
+            return f"{value / 10000:,.2f} 萬{match[2]}"
+        return match[0]
+
+    readable = re.sub(
+        r"(?<![\d.])(-?(?:\d{1,3}(?:,\d{3})+|\d+))\s*(元|股)", amount, str(value)
+    )
     return re.sub(
         r"(?<![A-Za-z0-9_.])(-?\d+\.\d{5,})(?![A-Za-z0-9_.])",
         lambda match: f"{Decimal(match[1]):.2f}",
-        str(value).replace("−", "-"),
+        readable.replace("−", "-"),
     )
 
 

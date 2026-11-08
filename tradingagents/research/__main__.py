@@ -164,6 +164,13 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     company_plan.add_argument("--as-of", required=True)
     company_plan.add_argument("--exchange", choices=("twse", "tpex"))
     company_plan.add_argument("--output", type=Path, required=True)
+    intake = commands.add_parser("company-intake", help="Capture bounded official originals and queue mandatory value review")
+    intake.add_argument("--snapshot", type=Path, required=True)
+    intake.add_argument("--output-dir", type=Path, required=True)
+    intake.add_argument("--archive-dir", type=Path, required=True)
+    intake.add_argument("--saved-input", type=Path, action="append", default=[])
+    intake.add_argument("--live", action="store_true")
+    intake.add_argument("--company-database", type=Path)
     company_import = commands.add_parser("company-import", help="Verify original quotes and append a company snapshot")
     company_import.add_argument("--input", type=Path, required=True)
     company_import.add_argument("--database-dir", type=Path, required=True)
@@ -283,6 +290,13 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                 raise ValueError("Use a new company plan output")
             write_json(args.output, result)
             print(json.dumps({"status": "plan_created", "sop_version": result["sop_version"]}))
+            return 0
+        if args.command == "company-intake":
+            from .company_intake import collect
+            result = collect(load_json(args.snapshot), args.output_dir, args.archive_dir,
+                             saved_packets=[load_json(p) for p in args.saved_input],
+                             company_database=args.company_database, live=args.live)
+            print(json.dumps(result))
             return 0
         if args.command == "company-import":
             from .company_database import append
