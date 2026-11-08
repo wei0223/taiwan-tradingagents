@@ -26,7 +26,7 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 
 ## 固定計算與公司資料庫（必經）
 
-資料下載完成後執行 `scripts/prepare_research.py --request <request.json>`，讀取 `fixed-inputs/fixed-state.json`、`technical-package.json`、`company-plan.json`、`company-instructions.md` 及 `company-input-template.json`。這一步不重新啟動 Sponsor，也不產生研究結論。依賴缺少時安裝儲存庫 `requirements-fixed-research.txt` 的固定版本；不要臨時換公式。
+資料下載完成後執行 `scripts/prepare_research.py --request <request.json>`，依輔助程式輸出的 `fixed_input_dir` 讀取 `fixed-state.json`、`technical-package.json`、`company-plan.json`、`company-instructions.md` 及 `company-input-template.json`。這一步不重新啟動 Sponsor，也不產生研究結論。依賴缺少時安裝儲存庫 `requirements-fixed-research.txt` 的固定版本；不要臨時換公式。
 
 技術面只引用固定計算包：1000個完整官方交易日、明確的參數／暖機期、原始價與還原價分開、完整週K。不得用舊snapshot的technical欄位取代、讓LLM補算或另選參數。驗收失敗仍可交付受限報告，但停止技術指標與推論。technical_package_sha256由程式綁定到最終分析師輸出；AI只依本次contract填欄位，不另增欄位，程式會拒用未綁定的技術論述。
 
@@ -69,3 +69,7 @@ description: 在 Codex 輸入「研究台股 2330」、「台股報告 3017」�
 沿用目前Codex登入與模型，不呼叫付費LLM API，不新增付費服務、不下單。資料／驗證或Agent失敗時合理停止並交付狀態，不無限重試。
 
 最後給出可點擊的報告與附件連結、一段結論、重要缺口，然後結束；不要自動提出下一輪持續追蹤任務。
+
+## 官方交易日曆自動復原
+
+prepare_research會自動核對共用calendar-cache中的官方月份原件，只查缺少的月份；403、429或過頻頁面即停止該主機並保存冷卻。不以星期或個股K線推算交易日。舊blocked_history會另建fixed-inputs-recovery版本，不覆寫已保存計算與研究。後續company-intake、workflow與upgrade一律使用輸出的effective_snapshot_path及fixed_input_dir；原始preparation.snapshot只作取得紀錄。fixed-inputs-current.json是目前版本定位，不是修改舊報告。復原不足仍停止受影響技術計算，繼續已驗證的研究，不重送Sponsor或要求使用者手工補日曆。

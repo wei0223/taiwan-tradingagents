@@ -25,12 +25,18 @@ INSTRUCTIONS = """依company-plan.json逐項建立公司資料。只從官方原
 """
 
 
-def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1"):
+def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1", *,
+            calendar_archive=None, calendar_seeds=(), calendar_live=False):
     from .technical_chart import svg
 
     root = Path(output)
     if root.exists() and any(root.iterdir()):
         raise ValueError("Use a new fixed preparation directory")
+    acquisition_sha = fingerprint(snapshot)
+    recovery = None
+    if calendar_archive is not None:
+        from tradingagents.dataflows.taiwan.calendar_recovery import recover
+        snapshot, recovery = recover(snapshot, calendar_archive, seeds=calendar_seeds, live=calendar_live)
     root.mkdir(parents=True, exist_ok=True)
     company_plan = plan(
         snapshot["instrument"]["stock_id"], snapshot["as_of"], snapshot["instrument"]["exchange"]
@@ -57,6 +63,7 @@ def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1"):
         ("company-plan.json", company_plan),
         ("company-input-template.json", skeleton),
         ("technical-package.json", technical),
+        ("effective-snapshot.json", snapshot),
     ]:
         (root / name).write_text(
             json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf8"
@@ -84,6 +91,9 @@ def prepare(snapshot, output, agent_protocol="fixed-research-agents-v1"):
         "company_database_complete": False,
         "report_generated": False,
         "source_snapshot_sha256": fingerprint(snapshot),
+        "acquisition_snapshot_sha256": acquisition_sha,
+        "effective_snapshot": "effective-snapshot.json",
+        "calendar_recovery": recovery,
     }
     (root / "fixed-state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf8")
     return state

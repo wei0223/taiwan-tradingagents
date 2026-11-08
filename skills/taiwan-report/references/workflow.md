@@ -52,3 +52,5 @@ company-latest只選既有版本，不聲稱最新完整；新分析日期要重
 本機報告與CLI必須能載入相同的requirements-fixed-research.txt依賴。個人project.json可設定technical_dependency_path及base_dependency_path，prepare_research會加入Python搜尋路徑；執行upgrade時也須使用相同環境。完整1000日不足會在最多三段、每次向前兩年查詢後停止；內部缺交易日、來源拒絕或日曆失效立即停止，不重試繞過。
 
 公司資料庫根目錄優先使用scripts/project.json中的company_database_root；沒有設定才使用專案work/company-database。不得每次另猜新資料庫路徑。
+
+日曆復原後，本文「本次snapshot」及fixed-inputs均指prepare_research輸出的effective_snapshot_path及fixed_input_dir。不得將原下載快照與復原後agent-run混用。原件捕獲時間、分析截止日與1000日規則維持不變。

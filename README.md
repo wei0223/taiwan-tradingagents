@@ -14,6 +14,8 @@ AI 研究使用目前登入的 Codex；Python 本身不代替 AI 研究。只有
 
 完成一份即結束，不建立持續追蹤、不下單、不呼叫付費 LLM API。
 
+官方交易日曆支援[自動復原](docs/taiwan/calendar-recovery.md)。程式重用已核對的官方月份原件，只查缺月；復原另存有效快照與計算版本，原下載資料與舊報告保留。
+
 ## 安裝與命令
 
 需要 Python 3.11 以上及已登入的 Codex。首次使用單次報告需設定技能的本機儲存庫與輸出路徑；詳見 [單次報告設定](docs/taiwan/on-demand-report.md) 及 [技能工作流程](skills/taiwan-report/references/workflow.md)。

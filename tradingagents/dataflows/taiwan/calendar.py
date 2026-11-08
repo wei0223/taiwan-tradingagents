@@ -16,105 +16,126 @@ class OfficialCalendarProvider:
     twse_url = "https://www.twse.com.tw/exchangeReport/FMTQIK"
     tpex_url = "https://www.tpex.org.tw/www/en-us/indexInfo/inx"
 
-    def __init__(self, transport=None, clock=None):
+    def __init__(self, transport=None, clock=None, *, archive_dir=None, live=True, max_requests=200):
         if transport is None:
             import requests
-
             transport = requests.Session()
+        if not 1 <= max_requests <= 200:
+            raise ValueError("Calendar request budget out of bounds")
         self.transport = transport
         self.clock = clock or (lambda: datetime.now(UTC))
-        self.cache = {}
+        self.cache, self.stopped = {}, set()
+        self.requests, self.max_requests, self.live = 0, max_requests, live
+        self.archive = None
+        if archive_dir:
+            from .calendar_recovery import CalendarArchive
+            self.archive = CalendarArchive(archive_dir, self.clock)
+            try:
+                self.stopped.update(self.archive.store.recent_refusals(self.clock()))
+            except (ValueError, KeyError, TypeError, UnicodeError):
+                # Corrupt restriction history cannot authorize another network request.
+                self.stopped.update({"www.twse.com.tw", "www.tpex.org.tw"})
+                self.archive.rejected.append({"reason": "invalid_cooldown_receipt"})
 
     def query(self, url, params):
+        from urllib.parse import urlsplit
+
+        from .originals import source_restricted
+
+        if url not in {self.twse_url, self.tpex_url}:
+            raise ValueError("Official calendar URL required")
         key = (url, tuple(sorted(params.items())))
-        if key not in self.cache:
-            try:
-                response = self.transport.get(url, params=params, timeout=20, allow_redirects=False)
-                if response.status_code != 200:
-                    raise ValueError("HTTP failure")
-                raw = response.content.decode("utf-8-sig")
-                payload = json.loads(raw)
-                now = self.clock()
-                if now.tzinfo is None:
-                    raise ValueError("Clock requires timezone")
-                self.cache[key] = (
-                    payload,
-                    {
-                        "source_url": url,
-                        "query": params,
-                        "retrieved_at": now.astimezone(UTC).isoformat(),
-                        "raw_response_utf8": response.content.decode("utf-8"),
-                        "response_sha256": hashlib.sha256(response.content).hexdigest(),
-                    },
-                )
-            except Exception:
-                raise VendorUnavailableError(
-                    "Official session source unavailable or invalid"
-                ) from None
-        return self.cache[key]
+        if key in self.cache:
+            return self.cache[key]
+        host = urlsplit(url).netloc
+        if not self.live or host in self.stopped or self.requests >= self.max_requests:
+            raise VendorUnavailableError("Calendar capture unavailable or source stopped")
+        self.requests += 1
+        try:
+            response = self.transport.get(url, params=params, timeout=20, allow_redirects=False)
+            now = self.clock()
+            if now.tzinfo is None:
+                raise ValueError("Clock requires timezone")
+            if response.status_code != 200 or source_restricted(response.content):
+                if self.archive:
+                    import base64
+                    self.archive.store.capture({
+                        "source_url": url, "query": params, "http_status": response.status_code,
+                        "status": "source_rejected" if response.status_code in {403, 429}
+                                  or source_restricted(response.content) else "unavailable",
+                        "captured_at": now.isoformat(),
+                        "content_base64": base64.b64encode(response.content).decode(),
+                        "sha256": hashlib.sha256(response.content).hexdigest()})
+                raise ValueError("Calendar source rejected request")
+            raw = response.content.decode("utf-8-sig")
+            payload = json.loads(raw)
+            archive = {
+                "source_url": url, "query": params,
+                "retrieved_at": now.astimezone(UTC).isoformat(),
+                "raw_response_utf8": response.content.decode("utf-8"),
+                "response_sha256": hashlib.sha256(response.content).hexdigest(),
+            }
+            exchange = "twse" if url == self.twse_url else "tpex"
+            from .calendar_recovery import archive_info
+            archive_info(archive, exchange)
+            if self.archive:
+                self.archive.add(archive, exchange)
+            self.cache[key] = payload, archive
+            return payload, archive
+        except Exception:
+            self.stopped.add(host)
+            raise VendorUnavailableError("Official session source unavailable or invalid") from None
 
     def fetch(self, exchange, start, as_of):
+        from calendar import monthrange
+
+        from .calendar_recovery import covers
+
         if exchange not in {"twse", "tpex"} or day(start) > day(as_of):
             raise ValueError("Invalid calendar request")
         end = day(as_of) - timedelta(days=1)
-        if (end.year - day(start).year) * 12 + end.month - day(start).month > 59:
-            parts = []
-            cursor = day(start)
-            while cursor <= end:
-                boundary = min(date(cursor.year + 3, cursor.month, 1), day(as_of))
-                parts.append(self.fetch(exchange, cursor.isoformat(), boundary.isoformat()))
-                cursor = boundary
-            good = [p for p in parts if p["status"] == "ok"]
-            result = {
-                "exchange": exchange,
-                "start": start,
-                "end": end.isoformat(),
-                "sessions": sorted({d for p in good for d in p["sessions"]}),
-                "archives": [a for p in good for a in p["archives"]],
-                "status": "ok" if len(good) == len(parts) else "partial",
-                "warnings": []
-                if len(good) == len(parts)
-                else ["Missing bounded calendar captures"],
-                "failed_parts": [p for p in parts if p["status"] != "ok"],
-                "basis": "official bounded captures; no weekday inference",
-            }
-            verify_calendar(result, exchange)
-            return result
-        result = {
-            "exchange": exchange,
-            "start": start,
-            "end": end.isoformat(),
-            "sessions": [],
-            "archives": [],
-            "status": "unavailable",
-            "warnings": [],
-            "basis": "official market index sessions; individual suspensions not inferred",
-        }
-        dates = []
-        try:
-            cursor = day(start).replace(day=1)
-            if (end.year - cursor.year) * 12 + end.month - cursor.month > 59:
-                raise ValueError("Calendar fetch limited to sixty months; use saved archives")
-            while cursor <= end:
-                url = self.twse_url if exchange == "twse" else self.tpex_url
-                requested = cursor.strftime("%Y%m%d" if exchange == "twse" else "%Y/%m/%d")
-                payload, archive = self.query(url, {"date": requested, "response": "json"})
+        cursor = day(start).replace(day=1)
+        if (end.year - cursor.year) * 12 + end.month - cursor.month >= 200:
+            raise ValueError("Calendar scope exceeds two hundred monthly captures")
+        cutoff = instant(as_of + "T23:59:59.999999+08:00")
+        result = {"exchange": exchange, "start": start, "end": end.isoformat(),
+                  "sessions": [], "archives": [], "status": "unavailable", "warnings": [],
+                  "basis": "verified official monthly originals; no weekday inference"}
+        reused, failed, dates = [], [], []
+        while cursor <= end:
+            bound = min(end, cursor.replace(day=monthrange(cursor.year, cursor.month)[1]))
+            url = self.twse_url if exchange == "twse" else self.tpex_url
+            params = {"date": cursor.strftime("%Y%m%d" if exchange == "twse" else "%Y/%m/%d"),
+                      "response": "json"}
+            try:
+                archive = self.archive.select(exchange, cursor, bound, cutoff) if self.archive else None
+                if archive is not None:
+                    payload = json.loads(archive["raw_response_utf8"].lstrip("\ufeff"))
+                    reused.append(cursor.isoformat())
+                else:
+                    if self.clock() > cutoff:
+                        raise VendorUnavailableError("New capture would be after research cutoff")
+                    payload, archive = self.query(url, params)
+                    if not covers(archive, exchange, bound, cutoff):
+                        raise ValueError("Monthly original does not cover the required end")
                 result["archives"].append(archive)
                 dates.extend(month_sessions(payload, exchange, cursor))
-                cursor = date(cursor.year + (cursor.month == 12), cursor.month % 12 + 1, 1)
-            if len(set(dates)) != len(dates):
-                raise ValueError("Duplicate market sessions")
-            result["sessions"] = sorted(d.isoformat() for d in dates if day(start) <= d <= end)
-            if result["sessions"]:
-                result["status"] = "partial" if result["warnings"] else "ok"
-            else:
-                result["warnings"].append("No verified sessions in requested window")
-        except (VendorUnavailableError, KeyError, TypeError, ValueError, IndexError):
-            result["sessions"] = []
-            result["warnings"].append(
-                "Official calendar coverage unavailable; do not infer weekdays"
-            )
+            except (VendorUnavailableError, KeyError, TypeError, ValueError, IndexError):
+                failed.append(cursor.isoformat())
+            cursor = date(cursor.year + (cursor.month == 12), cursor.month % 12 + 1, 1)
+        if len(set(dates)) != len(dates):
+            raise ValueError("Duplicate official market sessions")
+        result["sessions"] = sorted(d.isoformat() for d in dates if day(start) <= d <= end)
+        if result["sessions"]:
+            result["status"] = "partial" if failed else "ok"
+        if failed or not result["sessions"]:
+            result["warnings"] = ["Official calendar coverage unavailable; do not infer weekdays"]
+        result["recovery"] = {"reused_months": reused, "failed_months": failed,
+                              "http_requests": self.requests}
+        verify_calendar(result, exchange)
         return result
+
+
 
 
 def month_sessions(payload, exchange, month):
