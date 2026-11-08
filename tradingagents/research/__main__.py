@@ -178,6 +178,16 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     company_audit = commands.add_parser("company-audit", help="Verify a saved company snapshot and original bytes")
     company_audit.add_argument("--reference", type=Path, required=True)
     company_audit.add_argument("--output", type=Path, required=True)
+    prepare.add_argument("--calendar-cache-dir", type=Path)
+    calendar_recover = commands.add_parser("calendar-recover", help="Recover official calendar coverage into a new snapshot edition")
+    calendar_recover.add_argument("--snapshot", type=Path, required=True)
+    calendar_recover.add_argument("--archive-dir", type=Path, required=True)
+    calendar_recover.add_argument("--seed-snapshot", type=Path, action="append", default=[])
+    calendar_recover.add_argument("--output-dir", type=Path, required=True)
+    calendar_recover.add_argument("--live", action="store_true")
+    fixed.add_argument("--calendar-cache-dir", type=Path)
+    fixed.add_argument("--calendar-seed-snapshot", type=Path, action="append", default=[])
+    fixed.add_argument("--calendar-recovery-live", action="store_true")
     prepare.add_argument("--fixed-technical", action="store_true", help="Bounded history acquisition and fixed 1000-session engine")
     upgrade.add_argument("--fixed-pipeline", action="store_true")
     upgrade.add_argument("--company-snapshot", type=Path)
@@ -268,9 +278,23 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
             result = assemble(args.run)
             print(json.dumps({"protocol": result["protocol"], "status": result["status"], "independent_agents_executed": result["debate"]["independent_agents_executed"]}))
             return 0
+        if args.command == "calendar-recover":
+            from tradingagents.dataflows.taiwan.calendar_recovery import recover
+            if args.output_dir.exists():
+                raise ValueError("Use a new recovery output directory")
+            recovered, receipt = recover(load_json(args.snapshot), args.archive_dir,
+                                         seeds=[load_json(p) for p in args.seed_snapshot], live=args.live)
+            args.output_dir.mkdir(parents=True)
+            write_json(args.output_dir / "effective-snapshot.json", recovered)
+            write_json(args.output_dir / "recovery.json", receipt)
+            print(json.dumps(receipt))
+            return 0 if receipt["status"] in {"already_verified", "recovered"} else 1
         if args.command == "fixed-inputs":
             from .fixed_pipeline import prepare as prepare_fixed
-            result = prepare_fixed(load_json(args.snapshot), args.output_dir, agent_protocol=args.agent_protocol)
+            result = prepare_fixed(load_json(args.snapshot), args.output_dir, agent_protocol=args.agent_protocol,
+                                   calendar_archive=args.calendar_cache_dir,
+                                   calendar_seeds=[load_json(p) for p in args.calendar_seed_snapshot],
+                                   calendar_live=args.calendar_recovery_live)
             print(json.dumps(result))
             return 0 if result["technical_status"] == "ready" else 1
         if args.command == "company-latest":
@@ -526,7 +550,10 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                     from tradingagents.dataflows.taiwan.extensions import ExtendedTaiwanProvider
 
                     provider = ExtendedTaiwanProvider(publication_resolver=resolver,
-                                                      calendar_provider=OfficialCalendarProvider(), news_days=args.news_days)
+                                                      calendar_provider=OfficialCalendarProvider(
+                                                          archive_dir=args.calendar_cache_dir or
+                                                          (args.archive_dir or args.output_dir) / "calendar-cache"),
+                                                      news_days=args.news_days)
                 else:
                     provider = TaiwanMarketDataProvider(publication_resolver=resolver)
             summary = []

@@ -18,6 +18,7 @@ def main(argv=None, provider=None):
     parser.add_argument("--output", type=Path)
     parser.add_argument("--mops-publications", action="store_true")
     parser.add_argument("--extended", action="store_true")
+    parser.add_argument("--calendar-cache-dir", type=Path)
     parser.add_argument("--news-days", type=int, default=3)
     parser.add_argument("--financial-period-review", type=Path,
                         help="Reviewed per-field observations and original documents; dates alone never certify quarters")
@@ -34,7 +35,7 @@ def main(argv=None, provider=None):
                 from .extensions import ExtendedTaiwanProvider
 
                 provider = ExtendedTaiwanProvider(publication_resolver=resolver,
-                                                  calendar_provider=OfficialCalendarProvider(), news_days=args.news_days)
+                                                  calendar_provider=OfficialCalendarProvider(archive_dir=args.calendar_cache_dir), news_days=args.news_days)
             else:
                 provider = TaiwanMarketDataProvider(publication_resolver=resolver)
         result = provider.snapshot(args.symbol, args.start, args.as_of)

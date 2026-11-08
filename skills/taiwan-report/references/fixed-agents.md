@@ -18,3 +18,5 @@
 沒有補查更新的完整研究共16個新的獨立研究上下文、8次回原Agent反駁；若有合格更新再增加4個新上下文。不要同時超過當前工具額度；不需要付費LLM API、額外服務或長期追蹤。所有原有監測維持暫停。
 
 AI角色可在額度內並行，對同一run的workflow-submit/bind/fetch/resolve須由單一協調者依序執行，避免兩個程序同時改寫state。
+
+日曆復原後，本文「本次snapshot」及fixed-inputs均指prepare_research輸出的effective_snapshot_path及fixed_input_dir。不得將原下載快照與復原後agent-run混用。原件捕獲時間、分析截止日與1000日規則維持不變。
