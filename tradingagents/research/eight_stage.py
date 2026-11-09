@@ -1125,9 +1125,10 @@ def render(workflow):
         body += '<p>' + esc(DIMENSION_LABELS[ruling["dimension"]]) + '｜' + esc(stances[ruling["stance"]]) + '：' + esc(ruling["reason"]) + '；分歧：' + esc(ruling["key_disagreement"]) + '</p>'
     if workflow["active_revision"]:
         body += '<p>以上為補查前初判；最新分析已依新版本重做，最終判斷見四軸裁決。</p>'
-    body += '<h3>三面向核心證據</h3>'
+    body += '<h3>三面向核心主張</h3>'
     for face in workflow["core"]["faces"]:
-        body += '<p><strong>' + esc(DIMENSION_LABELS[face["dimension"]]) + '</strong>：' + esc(face["claim"]) + '；' + esc(face["reason"]) + '</p>'
+        label = face.get("reasoning_label", "待審")
+        body += '<p><strong>' + esc(DIMENSION_LABELS[face["dimension"]] + "｜" + label) + '</strong>：' + esc(face["claim"]) + '；' + esc(face["reason"]) + '</p>'
         trend = workflow["calculations"]["trend"] if face["dimension"] == "technical" else None
         if trend:
             body += '<p><strong>均線關係</strong> ' + esc(trend["summary"] + trend["details"]) + '</p>'

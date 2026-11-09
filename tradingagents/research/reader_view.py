@@ -79,6 +79,13 @@ def render(data, notes, snapshot, table):
         + ('<a href="report.pdf">下載閱讀版 PDF</a> · ' if data.get("reader_pdf_requested") else "")
         + '<a href="evidence.zip">下載完整可攜證據包</a> · <a href="audit.html">開發與來源稽核版</a></p></section>'
     )
+    if "reasoning_audit" in data:
+        from .reasoning_audit import display_rows as reasoning_rows
+
+        out += ('<h2>重大主張審查</h2><p>' + esc(data["reasoning_audit"]["status"])
+                + ' · <a href="reasoning-audit.json">推論稽核</a>'
+                + ' · <a href="claim-validation.json">逐項主張</a></p>'
+                + table(["主張", "狀態", "審查理由"], reasoning_rows(data["claim_validation"])))
     if "expectation_gap" in data:
         from .market_expectations import display_rows as gap_rows
 

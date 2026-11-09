@@ -124,3 +124,11 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 預期差只使用同公司、同指標、同期、同合併範圍與同單位的實績及共識中位數。EPS 還須區分基本及稀釋。共識的原件須在已驗證首次實績公布前捕獲。百分比以共識絕對值為分母；零共識只列絕對差。共識口徑未確認、首次公布時點缺證、缺來源或版本衝突時保留 unavailable。公司展望與 AI 假設另列來源類別。
 
 目前單次報告的共識來源為公開 FactSet 年度 EPS 轉引，仍保留轉引原文未證實的口徑。營收欄位在缺少核可共識來源時顯示 unavailable。公司資料庫的目前版本尚不能自動證實首次公布時點。可比較的 EPS 及營收差額算法已用固定輸入驗證。
+
+## STEP 4 重大主張與推論審查
+
+以 `workflow-reasoning --run <agents> --output-dir <新目錄>` 建立重大主張清單。清單涵蓋每面向選入核心的主張、最終發現和四個裁決。保留原主張、證據、反證、時間尺度、改判條件、原作者及完整內容雜湊。
+
+獨立審查者可用 `--review <JSON>` 提交具名審查。JSON 須含 stock_id、as_of 與依主張 ID 索引的 assessments。每筆包含 claim_sha256、reviewer、status、inference、reason，並可附 numeric_checks。數值檢查以 evidence_indices 指定封存引證，支援 value、difference 和 percent_change，expected 指定結果，places 指定小數位數。來源欄位、期間與單位沿用原件及封存計算合約。自由文字推論的合理性仍由具名審查者判斷。
+
+審查結果分為 supported、challenged、insufficient。待審及有爭議主張不得進入已確認核心。challenged 會留下 retry_required 與原作者定位，退回原角色時應建立新研究或審查版，保留原始工作結果及發布資料。輸出從新目錄另存。報告可用 extension_input.reasoning_review 附入同份審查，並將 `reasoning-audit.json` 和 `claim-validation.json` 收入證據包；HTML 與 PDF 顯示相應標籤。具名審查是可追溯判斷，程式可驗證綁定及選定數值，無法替代獨立語意判斷。

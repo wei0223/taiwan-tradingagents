@@ -739,7 +739,14 @@ def package(
         + "。此版面不代表模型或交易策略已有績效證明。</footer></main></body></html>"
     )
     if fixed_agents and "workflow" in fixed_agents:
-        result["workflow_review"] = fixed_agents["workflow"]
+        from .reasoning_audit import LABELS, review as review_reasoning
+
+        result["workflow_review"] = copy.deepcopy(fixed_agents["workflow"])
+        reasoning_audit, validation = review_reasoning(fixed_agents, (extension_input or {}).get("reasoning_review"))
+        result["reasoning_audit"], result["claim_validation"] = reasoning_audit, validation
+        for face in result["workflow_review"]["core"]["faces"]:
+            verdict = validation["claims"].get(face["claim_id"])
+            face["reasoning_label"] = LABELS[verdict["status"]] if verdict else LABELS["insufficient"]
     audit_page = None
     if one_shot:
         from .reader_research import build as build_reader
@@ -881,6 +888,8 @@ def package(
     if "workflow_review" in result:
         workflow_review = result["workflow_review"]
         write_json(output / "workflow-review.json", workflow_review)
+        write_json(output / "reasoning-audit.json", result["reasoning_audit"])
+        write_json(output / "claim-validation.json", result["claim_validation"])
         if "agent_access_policy" in workflow_review:
             write_json(output / "agent-access-policy.json", workflow_review["agent_access_policy"])
             write_json(output / "agent-execution-audit.json", workflow_review["agent_execution_audit"])

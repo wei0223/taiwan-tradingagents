@@ -11,7 +11,13 @@ VERDICTS = {"supported": "獲支持", "challenged": "受挑戰", "uncertain": "�
 
 def ruling_rows(data):
     rows = data.get("debate_review", {}).get("judgment", {}).get("rulings", [])
-    return [[AXES[r["axis"]], VERDICTS[r["verdict"]], r["reason"]] for r in rows]
+    validation = data.get("claim_validation", {}).get("claims", {})
+    if not validation:
+        return [[AXES[r["axis"]], VERDICTS[r["verdict"]], r["reason"]] for r in rows]
+    from .reasoning_audit import LABELS
+
+    return [[AXES[r["axis"]], LABELS[validation["decision.ruling_" + r["axis"]]["status"]],
+             r["reason"]] for r in rows]
 
 
 def debate_rows(data, material_only=False):
