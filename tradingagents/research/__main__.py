@@ -240,6 +240,7 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     wf_status.add_argument("--run", type=Path, required=True)
     wf_audit = commands.add_parser("workflow-audit", help="Revalidate all eight research stages; not proof of delivery or execution")
     wf_audit.add_argument("--run", type=Path, required=True)
+    wf_audit.add_argument("--execution-output-dir", type=Path, help="New directory for the dispatch policy and audit")
     args = parser.parse_args(argv)
     try:
         if args.command.startswith("workflow-"):
@@ -258,6 +259,14 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                 result = workflow.status(args.run)
             else:
                 result = workflow.assemble(args.run)
+                if args.execution_output_dir:
+                    args.execution_output_dir.mkdir(parents=True)
+                    dispatch = result["workflow"]
+                    write_json(args.execution_output_dir / "agent-access-policy.json", dispatch["agent_access_policy"])
+                    result = dispatch["agent_execution_audit"]
+                    write_json(args.execution_output_dir / "agent-execution-audit.json", result)
+                    print(json.dumps(result, ensure_ascii=False))
+                    return int(result["status"] == "blocked")
             print(json.dumps(result, ensure_ascii=False))
             return 0
         if args.command == "agent-prompt":

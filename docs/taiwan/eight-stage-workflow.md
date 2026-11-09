@@ -110,3 +110,9 @@ planner 驗收後、workflow-bind 前，執行 company-intake --snapshot 本次s
 
 程式保留原件bytes、SHA256、URL、捕獲時間與官方下載鏈。公布時間未知維持null，以捕獲時間決定可用性。新批次可沿用舊bytes和原擷取時間，語意審查另留實際時間。company-import/audit仍是workflow-bind的前置關卡；沒有足夠的財務欄位時繼續已通過面向的分析。此入口不宣稱歷史初版完整，也不自動將供應商欄位核准為單季。
 稅費抄錄若使用損益表的帶正負號影響金額，審查者須明示 statement_sign=signed_profit_effect；計算核心以負稅費影響除以稅前獲利計有效稅率。既有正數費用口徑沿用原算式。投資收益及非控制權益以各自直接欄位保存，不用歸母占比變動冒充金額變動。
+
+## STEP 2 派工稽核
+
+交付包提供 `agent-access-policy.json` 與 `agent-execution-audit.json`，可另用 `workflow-audit --run <agents> --execution-output-dir <新目錄>` 重驗。程式核對實際封存的派工提示、指定輸入、已發布依賴、接受順序、角色與收據。多空開場使用新上下文，雙方皆接受後才交由原角色反駁。
+
+Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收據，結果為 limited，檔案系統強制存取控制尚未實作。封存資料無法證明工具外傳遞或角色實際讀取範圍。收據缺漏、上下文重用或未發布論點出現在派工包時拒收。Mock 與無法完成派工的研究不能取得 limited 通關。

@@ -872,7 +872,11 @@ def package(
     if result.get("forward_estimate"):
         write_json(output / "forward-estimate.json", result["forward_estimate"])
     if "workflow_review" in result:
-        write_json(output / "workflow-review.json", result["workflow_review"])
+        workflow_review = result["workflow_review"]
+        write_json(output / "workflow-review.json", workflow_review)
+        if "agent_access_policy" in workflow_review:
+            write_json(output / "agent-access-policy.json", workflow_review["agent_access_policy"])
+            write_json(output / "agent-execution-audit.json", workflow_review["agent_execution_audit"])
     (output / "report.html").write_text(page, encoding="utf-8", newline="\n")
     write_json(
         output / "manifest.json",
