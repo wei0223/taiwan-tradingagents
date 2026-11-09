@@ -245,6 +245,11 @@ def package(
     if (extension_input or {}).get("one_shot"):
         from .public_eps import build as public_eps
         result["public_eps"] = public_eps((extension_input or {}).get("public_eps"), stock, as_of)
+        from .data_quality import report_inputs as quality_inputs
+
+        result["data_quality"], result["expectation_gap"] = quality_inputs(
+            snapshot, audit, fixed_company, result["public_eps"], industry["sources"],
+        )
     if fixed_state is not None:
         result["fixed_pipeline"] = fixed_state
         result["fixed_technical"] = {k: fixed_technical[k] for k in ("status", "engine_version", "history", "input_sha256")}
@@ -799,6 +804,8 @@ def package(
     if "public_eps" in result:
         from tradingagents.dataflows.taiwan.source_store import SourceStore
         write_json(output / "public-eps.json", result["public_eps"])
+        write_json(output / "data-quality-report.json", result["data_quality"])
+        write_json(output / "expectation-gap.json", result["expectation_gap"])
         store = SourceStore(output / "public-eps-sources")
         receipts = {}
         for key, doc in (extension_input or {}).get("public_eps", {}).get("sources", {}).items():

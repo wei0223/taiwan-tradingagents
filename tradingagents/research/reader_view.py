@@ -79,6 +79,13 @@ def render(data, notes, snapshot, table):
         + ('<a href="report.pdf">下載閱讀版 PDF</a> · ' if data.get("reader_pdf_requested") else "")
         + '<a href="evidence.zip">下載完整可攜證據包</a> · <a href="audit.html">開發與來源稽核版</a></p></section>'
     )
+    if "expectation_gap" in data:
+        from .market_expectations import display_rows as gap_rows
+
+        out += ("<h2>資料品質與市場預期差</h2><p>資料可用性："+data["data_quality"]["status"]
+                + ' · <a href="data-quality-report.json">資料來源與缺口</a>'
+                + ' · <a href="expectation-gap.json">預期差明細</a></p>'
+                + table(["指標", "狀態", "實績減共識／缺口"], gap_rows(data["expectation_gap"])))
     if "public_eps" in data:
         from .public_eps import section as consensus_section
         out += consensus_section(data["public_eps"], table)
