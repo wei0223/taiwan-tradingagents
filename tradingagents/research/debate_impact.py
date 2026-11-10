@@ -1,6 +1,7 @@
 """Trace observable debate changes from accepted work, without inferring causal benefit."""
 
 import json
+from collections import Counter
 from pathlib import Path
 
 from .bundle import canonical, fingerprint
@@ -18,9 +19,13 @@ def _positions(result):
 def _trace(opening, opponent, reply):
     # Only compare identical claim wording and horizon. No semantic matching of prose.
     before = {(f["claim"], f["horizon"]): f for f in opening["findings"]}
+    opening_counts = Counter((f["claim"], f["horizon"]) for f in opening["findings"])
+    reply_counts = Counter((f["claim"], f["horizon"]) for f in reply["findings"])
+    comparable = {key for key in before if opening_counts[key] == reply_counts[key] == 1}
     confidence = []
     for finding in reply["findings"]:
-        original = before.get((finding["claim"], finding["horizon"]))
+        key = (finding["claim"], finding["horizon"])
+        original = before[key] if key in comparable else None
         if original and original["confidence"] != finding["confidence"]:
             confidence.append({"opening_claim_id": original["id"], "reply_claim_id": finding["id"],
                                "before": original["confidence"], "after": finding["confidence"]})
@@ -47,7 +52,7 @@ def _trace(opening, opponent, reply):
             "additional_citations": list(additional_refs.values()),
             "disputed_claim_ids": [r["claim_id"] for r in responses if r["assessment"] == "dispute"],
             "confidence_changes": confidence, "confidence_comparison": "matched_exact_claim_and_horizon"
-            if any((f["claim"], f["horizon"]) in before for f in reply["findings"]) else "unavailable",
+            if comparable else "unavailable",
             "change_types": ["unavailable"] if unavailable else flags or ["no_material_change"]}
 
 
