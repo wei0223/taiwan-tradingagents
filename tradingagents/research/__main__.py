@@ -267,8 +267,16 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     modes.add_argument("--plan", type=Path, required=True)
     modes.add_argument("--run-result", type=Path, action="append", default=[])
     modes.add_argument("--output-dir", type=Path, required=True)
+    workflow_cost = commands.add_parser("research-workflow-cost", help="Review observed costs on paired holdout cells")
+    workflow_cost.add_argument("--comparison", type=Path, required=True)
+    workflow_cost.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "research-workflow-cost":
+            from .workflow_optimization import compare_costs
+
+            print(json.dumps(compare_costs(args.comparison, args.output_dir), ensure_ascii=False))
+            return 0
         if args.command in {"research-mode-plan", "research-mode-compare"}:
             from .mode_experiment import compare_files, freeze
 
