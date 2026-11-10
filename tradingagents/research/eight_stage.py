@@ -1063,16 +1063,19 @@ def report_inputs(run, snapshot, extension, review_input):
 
 
 def export(run, destination, *, expected_state_sha256=None):
-    from tempfile import TemporaryDirectory
+    from uuid import uuid4
 
     root = SourceStore.path(run)
     target = SourceStore.path(destination)
     if target.exists() or target.is_relative_to(root):
         raise ValueError("Use a new workflow archive outside the source run")
     target.parent.mkdir(parents=True, exist_ok=True)
-    with TemporaryDirectory(dir=target.parent, prefix=".agent-export-") as temp:
-        staged = SourceStore.path(temp) / "run"
-        shutil.copytree(root, staged)
+    # Inherit report permissions. TemporaryDirectory's Windows ACL can block
+    # the reader even after renaming a validated copy into its final location.
+    staged = target.parent / f".agent-export-{uuid4().hex}"
+    staged.mkdir()
+    try:
+        shutil.copytree(root, staged, dirs_exist_ok=True)
         staged_root, state = load(staged)
         if expected_state_sha256 is not None and fingerprint(state) != expected_state_sha256:
             raise ValueError("Copied workflow differs from the validated report inputs")
@@ -1080,6 +1083,9 @@ def export(run, destination, *, expected_state_sha256=None):
         if target.exists():
             raise ValueError("Never overwrite a workflow archive")
         staged.rename(target)
+    finally:
+        if staged.exists() and staged.resolve() == staged:
+            shutil.rmtree(staged)
 
 
 def is_grouped_ma_evidence(item, trend):
