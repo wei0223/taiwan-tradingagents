@@ -745,6 +745,9 @@ def package(
         result["workflow_review"] = copy.deepcopy(fixed_agents["workflow"])
         reasoning_audit, validation = review_reasoning(fixed_agents, (extension_input or {}).get("reasoning_review"))
         result["reasoning_audit"], result["claim_validation"] = reasoning_audit, validation
+        from .debate_impact import build as build_debate_impact
+
+        result["debate_impact"] = build_debate_impact(fixed_agents, validation)
         for face in result["workflow_review"]["core"]["faces"]:
             verdict = validation["claims"].get(face["claim_id"])
             face["reasoning_label"] = LABELS[verdict["status"]] if verdict else LABELS["insufficient"]
@@ -903,6 +906,7 @@ def package(
         write_json(output / "workflow-review.json", workflow_review)
         write_json(output / "reasoning-audit.json", result["reasoning_audit"])
         write_json(output / "claim-validation.json", result["claim_validation"])
+        write_json(output / "debate-impact.json", result["debate_impact"])
         if "agent_access_policy" in workflow_review:
             write_json(output / "agent-access-policy.json", workflow_review["agent_access_policy"])
             write_json(output / "agent-execution-audit.json", workflow_review["agent_execution_audit"])

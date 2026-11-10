@@ -253,8 +253,17 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     scoring.add_argument("--actuals", type=Path)
     scoring.add_argument("--benchmark", default="0050")
     scoring.add_argument("--output-dir", type=Path, required=True)
+    impact = commands.add_parser("research-debate-impact", help="Link a debate trace to a verified manual outcome")
+    impact.add_argument("--report-dir", type=Path, required=True)
+    impact.add_argument("--evaluation", type=Path, required=True)
+    impact.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "research-debate-impact":
+            from .debate_impact import link
+
+            print(json.dumps(link(args.report_dir, args.evaluation, args.output_dir), ensure_ascii=False))
+            return 0
         if args.command == "research-score":
             from .research_outcomes import score_reports
 
