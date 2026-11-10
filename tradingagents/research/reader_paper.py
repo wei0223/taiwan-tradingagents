@@ -151,6 +151,11 @@ def render_pdf(directory, font_path):
             story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
         decisions = workflow["supplement"]["decisions"]
         story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
+    if "decision_conditions" in data:
+        from .decision_conditions import display_rows as condition_rows
+
+        story += [p("條件式交易研究", "h2"),
+                  table(["項目", "狀態", "條件"], condition_rows(data["decision_conditions"]))]
     if "valuation_scenarios" in data:
         from .valuation_horizons import display_rows as valuation_rows
 

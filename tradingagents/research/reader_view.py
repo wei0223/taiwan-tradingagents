@@ -86,6 +86,11 @@ def render(data, notes, snapshot, table):
                 + ' · <a href="reasoning-audit.json">推論稽核</a>'
                 + ' · <a href="claim-validation.json">逐項主張</a></p>'
                 + table(["主張", "狀態", "審查理由"], reasoning_rows(data["claim_validation"])))
+    if "decision_conditions" in data:
+        from .decision_conditions import display_rows as condition_rows
+
+        out += ('<h2>條件式交易研究</h2><p><a href="decision-conditions.json">觸發、失效及成本明細</a></p>'
+                + table(["項目", "狀態", "條件"], condition_rows(data["decision_conditions"])))
     if "valuation_scenarios" in data:
         from .valuation_horizons import display_rows as valuation_rows
 
