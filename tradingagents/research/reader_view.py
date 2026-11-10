@@ -86,6 +86,9 @@ def render(data, notes, snapshot, table):
                 + ' · <a href="reasoning-audit.json">推論稽核</a>'
                 + ' · <a href="claim-validation.json">逐項主張</a></p>'
                 + table(["主張", "狀態", "審查理由"], reasoning_rows(data["claim_validation"])))
+    if data.get("local_research_archive"):
+        out += ('<p><a href="forecast-record.json">本機研究封存</a>'
+                ' · <a href="forecast-manifest.json">封存完整性清單</a></p>')
     if "decision_conditions" in data:
         from .decision_conditions import display_rows as condition_rows
 
