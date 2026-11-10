@@ -19,6 +19,18 @@ def _path(value):
     return path
 
 
+def initial_vintage(r):
+    return (
+        r.get("vintage_kind") == "initial"
+        and r.get("initial_publication_verified") is True
+        and r.get("source_value_reviewed") is True
+        and r.get("initial_publication_history_verified") is True
+        and r.get("revision_policy") == "first_official_release"
+        and r.get("official_source_reviewed") is True
+        and r.get("source_locator")
+    )
+
+
 def track(release_path, actuals, output_root, clock=None, *, mock=False):
     release_path = _path(release_path)
     release = read_release(release_path)
@@ -50,17 +62,7 @@ def track(release_path, actuals, output_root, clock=None, *, mock=False):
         r for r in available if timestamp(r["published_at"]) <= timestamp(release["issued_at"])
     ]
     available = [r for r in available if r not in already_public]
-    initial = [
-        r
-        for r in available
-        if r.get("vintage_kind") == "initial"
-        and r.get("initial_publication_verified") is True
-        and r.get("source_value_reviewed") is True
-        and r.get("initial_publication_history_verified") is True
-        and r.get("revision_policy") == "first_official_release"
-        and r.get("official_source_reviewed") is True
-        and r.get("source_locator")
-    ]
+    initial = [r for r in available if initial_vintage(r)]
     result = {
         "evaluation_mode": "mock_rehearsal_not_performance"
         if mock or any(r.get("evidence_kind") == "mock" for r in actuals) else "official_tracking",
