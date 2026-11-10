@@ -132,3 +132,11 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 獨立審查者可用 `--review <JSON>` 提交具名審查。JSON 須含 stock_id、as_of 與依主張 ID 索引的 assessments。每筆包含 claim_sha256、reviewer、status、inference、reason，並可附 numeric_checks。數值檢查以 evidence_indices 指定封存引證，支援 value、difference 和 percent_change，expected 指定結果，places 指定小數位數。來源欄位、期間與單位沿用原件及封存計算合約。自由文字推論的合理性仍由具名審查者判斷。
 
 審查結果分為 supported、challenged、insufficient。待審及有爭議主張不得進入已確認核心。challenged 會留下 retry_required 與原作者定位，退回原角色時應建立新研究或審查版，保留原始工作結果及發布資料。輸出從新目錄另存。報告可用 extension_input.reasoning_review 附入同份審查，並將 `reasoning-audit.json` 和 `claim-validation.json` 收入證據包；HTML 與 PDF 顯示相應標籤。具名審查是可追溯判斷，程式可驗證綁定及選定數值，無法替代獨立語意判斷。
+
+## STEP 5 估值與時間尺度
+
+正式單次報告附上 `valuation-scenarios.json` 與 `horizon-analysis.json`。前者分列直接公布的單季稀釋 EPS、公開年度共識及已核四季模型。三情境只採公司與研究日相符、四季連續且通過既有模型驗證的輸出。四季加總與來源參數可追溯至 forward-estimate.json。
+
+使用合格未還原收盤價及模型明示的倍數，分列 EPS × 倍數的條件價格、現價除以倍數所需的 EPS、相對已公布四季 EPS 的所需變化，以及基準情境與現價要求的差。供應商歷史倍數另列為描述性背景，分母未驗證時不升格成估值錨。採用的公司假設、倍數理由及風險保留在證據包。缺模型、缺合格價格或口徑不一致時保留缺值。
+
+企業中長期判斷、估值與短期價格觀察分開呈現，保留原主張的推論審查狀態。

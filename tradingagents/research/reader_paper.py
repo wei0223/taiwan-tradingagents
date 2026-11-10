@@ -151,6 +151,14 @@ def render_pdf(directory, font_path):
             story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
         decisions = workflow["supplement"]["decisions"]
         story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
+    if "valuation_scenarios" in data:
+        from .valuation_horizons import display_rows as valuation_rows
+
+        scenarios, implied, times = valuation_rows(data["valuation_scenarios"], data["horizon_analysis"])
+        story += [p("估值與時間尺度", "h2"), table(["尺度", "狀態", "依據"], times),
+                  table(["情境", "四季EPS合計（元）", "條件價格"], scenarios)]
+        if implied:
+            story.append(table(["假設倍數", "現價所需EPS（元）", "較已公布四季變化（%）", "基準EPS減所需EPS（元）"], implied))
     if "expectation_gap" in data:
         from .market_expectations import display_rows as gap_rows
 
