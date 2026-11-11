@@ -79,6 +79,11 @@ def render(data, notes, snapshot, table):
         + ('<a href="report.pdf">下載閱讀版 PDF</a> · ' if data.get("reader_pdf_requested") else "")
         + '<a href="evidence.zip">下載完整可攜證據包</a> · <a href="audit.html">開發與來源稽核版</a></p></section>'
     )
+    if "debate_impact" in data:
+        from .debate_impact import summary_line
+
+        out += ('<h2>辯論前後差異</h2><p>' + esc(summary_line(data["debate_impact"]))
+                + ' · <a href="debate-impact.json">立場及反駁紀錄</a></p>')
     if "reasoning_audit" in data:
         from .reasoning_audit import display_rows as reasoning_rows
 

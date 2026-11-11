@@ -151,6 +151,10 @@ def render_pdf(directory, font_path):
             story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
         decisions = workflow["supplement"]["decisions"]
         story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
+    if "debate_impact" in data:
+        from .debate_impact import summary_line
+
+        story += [p("辯論前後差異", "h2"), p(summary_line(data["debate_impact"]), "small")]
     if "decision_conditions" in data:
         from .decision_conditions import display_rows as condition_rows
 
