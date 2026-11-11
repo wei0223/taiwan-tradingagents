@@ -87,6 +87,8 @@ def render_pdf(directory, font_path):
         *(p("• " + part) for part in conclusions[:3]),
         p("本次單次研究，不發布正式預測、不評分、不建立追蹤；條件價格不是合理價。", "small"),
     ]
+    if data.get("reasoning_audit", {}).get("status") == "limited":
+        story.append(p("推論審查受限。逐項爭議與待審主張見 claim-validation.json。", "small"))
     conditions = data.get("debate_review", {}).get("judgment", {}).get("revision_conditions", [])
     if conditions and data.get("workflow_review"):
         story.append(p("優先改判條件｜" + conditions[0], "small"))
@@ -117,7 +119,8 @@ def render_pdf(directory, font_path):
         for ruling in workflow["dimension_rulings"]:
             story.append(p(DIMENSION_LABELS[ruling["dimension"]] + "｜" + stances[ruling["stance"]] + "：" + ruling["reason"] + "；分歧：" + ruling["key_disagreement"]))
         for face in workflow["core"]["faces"]:
-            story += [p(DIMENSION_LABELS[face["dimension"]] + "｜核心主張", "h3"), p(face["claim"] + "；" + face["reason"])]
+            label = face.get("reasoning_label", "待審")
+            story += [p(DIMENSION_LABELS[face["dimension"]] + "｜核心主張｜" + label, "h3"), p(face["claim"] + "；" + face["reason"])]
             trend = workflow["calculations"]["trend"] if face["dimension"] == "technical" else None
             if trend:
                 story.append(p(trend["summary"] + trend["details"], "small"))

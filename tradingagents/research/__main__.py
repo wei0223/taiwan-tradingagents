@@ -241,6 +241,10 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     wf_audit = commands.add_parser("workflow-audit", help="Revalidate all eight research stages; not proof of delivery or execution")
     wf_audit.add_argument("--run", type=Path, required=True)
     wf_audit.add_argument("--execution-output-dir", type=Path, help="New directory for the dispatch policy and audit")
+    reasoning = commands.add_parser("workflow-reasoning", help="Review evidence-bound material claims in a new audit edition")
+    reasoning.add_argument("--run", type=Path, required=True)
+    reasoning.add_argument("--review", type=Path)
+    reasoning.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command.startswith("workflow-"):
@@ -255,6 +259,15 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                 result = workflow.abandon_fetch(args.run, args.abandon_reason) if args.abandon_reason else workflow.fetch(args.run, args.archive_dir, live=args.live)
             elif args.command == "workflow-resolve":
                 result = workflow.resolve(args.run, load_json(args.decisions), args.company_reference, load_json(args.review_input) if args.review_input else None)
+            elif args.command == "workflow-reasoning":
+                from .reasoning_audit import review as review_reasoning
+
+                result, validation = review_reasoning(
+                    workflow.assemble(args.run), load_json(args.review) if args.review else None,
+                )
+                args.output_dir.mkdir(parents=True)
+                write_json(args.output_dir / "reasoning-audit.json", result)
+                write_json(args.output_dir / "claim-validation.json", validation)
             elif args.command == "workflow-status":
                 result = workflow.status(args.run)
             else:
