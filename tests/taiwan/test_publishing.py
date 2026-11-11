@@ -139,6 +139,48 @@ class PublishingTests(unittest.TestCase):
         self.assertEqual(r["freshness"], "STALE")
         self.assertFalse(r["current_trade_conclusion_allowed"])
 
+    def test_aligned_post_close_gate_requires_the_reviewed_capture_identity(self):
+        from tradingagents.research.market_observation import post_close_inputs
+        from tradingagents.research.scenarios import timestamp
+
+        s = current_snapshot()
+        today = "2026-10-22"
+        cutoff = "2026-10-22T21:00:00+08:00"
+        s["as_of"] = today
+        s["instrument"]["stock_id"] = "1216"
+        calendar = s["market_calendar"]
+        calendar.update(end="2026-10-21", sessions=calendar["sessions"][:-1])
+        calendar["archives"][0]["retrieved_at"] = cutoff
+        s["technical"]["data_date"] = "2026-10-21"
+        price = {"date": today, "stock_id": "1216", "open": 100, "max": 102,
+                 "min": 99, "close": 101, "Trading_Volume": 1000}
+        for collection, name in (
+            ("datasets", "TaiwanStockPrice"),
+            ("extensions", "TaiwanStockPriceAdj"),
+            ("datasets", "TaiwanStockInstitutionalInvestorsBuySell"),
+        ):
+            payload = s[collection][name]
+            if name.endswith("BuySell"):
+                raw_rows = [
+                    {"date": today, "stock_id": "1216", "name": row["values"]["name"], "buy": 1, "sell": 0}
+                    for row in payload["records"] if row["data_date"] == today
+                ]
+            else:
+                raw_rows = [price]
+                for row in payload["records"]:
+                    row["values"] = {"open": 100, "high": 102, "low": 99, "close": 100, "volume": 1000}
+            payload.update(dataset=name, stock_id="1216", retrieved_at=cutoff, raw_rows=raw_rows)
+            payload["records"] = [row for row in payload["records"] if row["data_date"] < today]
+            for row in payload["records"]:
+                row["retrieved_at"] = cutoff
+        _, captures = post_close_inputs(s, timestamp(cutoff))
+        result = {"source_audit": {"status": "passed"}, "extension": {"research_plan": {"context": {
+            "cutoff_at": cutoff
+        }}}, "review": {"axes": {"short_term": {"status": "observe", "as_of": today, "post_close_captures": captures}}}}
+        self.assertEqual(assess(s, result)["latest_market_gate"]["status"], "PASS")
+        result["review"]["axes"]["short_term"]["post_close_captures"] = {"ohlcv": captures["ohlcv"]}
+        self.assertEqual(assess(s, result)["latest_market_gate"]["status"], "FAIL")
+
     def test_old_calendar_cannot_certify_latest_market(self):
         s = current_snapshot()
         s["market_calendar"]["end"] = "2026-10-22"

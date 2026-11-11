@@ -362,7 +362,16 @@ def package(
     if result["v6_review"].get("original_numeric_review"):
         v5_section = render_v5(result["v5_review"], table, historical=True)
     dashboard, extension_appendix = render_extension(extra, debate_review, snapshot, table)
-    if not publication["latest_market_gate"]["current_trade_conclusion_allowed"]:
+    market_gate = publication["latest_market_gate"]
+    if market_gate.get("post_close_captures"):
+        trade = reviewed["axes"]["short_term"]
+        decision.update(
+            state=trade["status"], as_of=trade["as_of"], post_close_checks=trade["checks"],
+            current_trade_conclusion_allowed=True, risk_reward=[],
+            risk_reward_reason="same_day_fixed_adjusted_price_setup",
+        )
+        risk_scenarios = []
+    if not market_gate["current_trade_conclusion_allowed"]:
         decision["current_trade_conclusion_allowed"] = False
         decision["publication_status"] = "BLOCKED_STALE_OR_UNVERIFIED_MARKET"
         decision["risk_reward"] = []
@@ -424,10 +433,14 @@ def package(
                     "reviewed_valuation_model": "原件核對與情境模型",
                     "price_confirmation": "價格結構確認",
                     "complete_institutional_window": "法人視窗完整性",
+                    "two_closes_above_ma20": "連兩日收復 20 日均線",
+                    "close_breaks_prior20_high": "收盤突破前高",
+                    "volume_confirmation": "量能確認",
+                    "provisional_rr": "情境風報比門檻",
                 }[k],
                 "已滿足" if v else "未滿足",
             ]
-            for k, v in decision["checks"].items()
+            for k, v in decision.get("post_close_checks", decision["checks"]).items()
         ],
     )
     summary += "<p>短期觀察範圍為後續五至二十個市場交易日；新增正式財報、資料更正或價格結構失效時重新評估。這是觀察框架，未模擬成交或持倉。</p>"

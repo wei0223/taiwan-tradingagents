@@ -374,3 +374,22 @@ def build(snapshot, extension, spec=None, *, technical=None, company=None):
         "editorial": editorial,
         "financial_qualification_changed": False,
     }
+
+
+def post_close_ruling_text(data):
+    market = data.get("latest_market_gate", {})
+    if not market.get("post_close_captures"):
+        return None
+    trade = data["review"]["axes"]["short_term"]
+    label = "觀察" if trade["status"] == "observe" else "條件候選，待下一實際開盤重算"
+    rr = trade["provisional_rr"]
+    rr_text = f"{rr:.2f}R" if rr is not None else "不可用"
+    checks = {
+        "two_closes_above_ma20": "連兩日收復 20 日均線",
+        "close_breaks_prior20_high": "收盤突破前高",
+        "volume_confirmation": "量能確認",
+        "provisional_rr": "風報比門檻",
+    }
+    failed = "、".join(checks[key] for key, passed in trade["checks"].items() if not passed)
+    detail = f"未通過項目為{failed}。" if failed else "收盤條件均通過。"
+    return f"{trade['as_of']}｜{label}。還原收盤 {trade['provisional_entry']:,.2f} 元，情境風報比 {rr_text}。{detail}"

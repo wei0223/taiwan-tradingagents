@@ -350,7 +350,7 @@ def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, s
     if technical_gate is not None and technical_gate.get("status") != "ready":
         trade = {"status": "unavailable", "reason": "fixed_technical_gate_failed", "technical_status": technical_gate.get("status")}
     else:
-        trade = (short_review(snapshot, cutoff) if snapshot is not None else short_term) or {
+        trade = (short_review(snapshot, cutoff, technical_gate) if snapshot is not None else short_term) or {
             "status": "unavailable",
             "reason": "Complete adjusted bars and calendar required",
         }
@@ -392,12 +392,29 @@ def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, s
     return result
 
 
-def short_review(snapshot, cutoff=None):
+def short_review(snapshot, cutoff=None, technical_gate=None):
     """Use the existing fixed short-horizon rule, independent of four-quarter PE."""
     from tradingagents.dataflows.taiwan.calendar import verify_calendar
     from tradingagents.dataflows.taiwan.extensions import ADJUSTED
 
+    from .market_observation import post_close_inputs
+    from .publishing import market_gate
     from .trade_rules import setup
+
+    captures = None
+    observation = (technical_gate or {}).get("post_close_observation")
+    if observation and technical_gate["status"] == "ready" and cutoff is not None:
+        view, candidate = post_close_inputs(snapshot, cutoff)
+        series = technical_gate.get("price_series", {}).get("vendor_adjusted", {})
+        if (candidate and candidate == observation["captures"]
+                and observation["data_date"] == snapshot["as_of"]
+                and market_gate(view, cutoff.isoformat())["status"] == "PASS"):
+            adjusted = view["extensions"][ADJUSTED]["records"]
+            values = {r["data_date"]: r["values"] for r in adjusted}
+            dates = view["market_calendar"]["sessions"][-22:]
+            if (series.get("dates", [])[-22:] == dates
+                    and series.get("bars", [])[-22:] == [values.get(d) for d in dates]):
+                snapshot, captures = view, candidate
 
     calendar_data = snapshot.get("market_calendar", {})
     if calendar_data.get("status") != "ok":
@@ -405,7 +422,7 @@ def short_review(snapshot, cutoff=None):
     sessions = [
         d
         for d in verify_calendar(calendar_data, snapshot["instrument"]["exchange"])
-        if d < snapshot["as_of"]
+        if d < snapshot["as_of"] or (captures and d == snapshot["as_of"])
     ][-22:]
     rows = snapshot.get("extensions", {}).get(ADJUSTED, {}).get("records", [])
     by_date = {r["data_date"]: r for r in rows}
@@ -425,4 +442,7 @@ def short_review(snapshot, cutoff=None):
             "reason": "Adjusted price capture unavailable at review cutoff",
         }
     bars = [{"date": d, "basis": "vendor_adjusted", **by_date[d]["values"]} for d in sessions]
-    return setup(bars, sessions)
+    result = setup(bars, sessions)
+    if captures:
+        result["post_close_captures"] = captures
+    return result

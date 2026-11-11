@@ -315,6 +315,16 @@ def assess(snapshot, result, inputs=None, documents=None):
     spec = inputs.get("research_plan", {})
     cutoff = (plan.get("context") or {}).get("cutoff_at") or snapshot["as_of"] + "T23:59:59+08:00"
     market = market_gate(snapshot, cutoff)
+    trade = result.get("review", {}).get("axes", {}).get("short_term", {})
+    if (trade.get("post_close_captures") and trade.get("as_of") == snapshot["as_of"]
+            and trade.get("status") in {"observe", "candidate_pending_next_open"}):
+        from .market_observation import post_close_inputs
+
+        view, captures = post_close_inputs(snapshot, timestamp(cutoff))
+        if captures and captures == trade["post_close_captures"]:
+            aligned = market_gate(view, cutoff)
+            if aligned["status"] == "PASS":
+                market = {**aligned, "post_close_captures": captures}
     completeness = plan.get("completeness", {})
     pending = pending_events(plan, spec)
     registry = result.get("official_source_registry", {})
