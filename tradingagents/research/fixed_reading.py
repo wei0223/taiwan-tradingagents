@@ -32,6 +32,21 @@ def ruling_rows(data):
     return result
 
 
+def reviewed_financial_rows(data):
+    axes = data.get("review", {}).get("axes", {})
+    accounting = axes.get("accounting_earnings", {})
+    current, prior = accounting.get("current"), accounting.get("prior")
+    rows = []
+    if current and prior:
+        rows.append(["合併單季稀釋 EPS", f"{current['period_start']} 至 {current['period_end']}",
+                     f"{current['eps_twd']:.2f} 元，去年同期 {prior['eps_twd']:.2f} 元（附註重算）"])
+    cash = axes.get("cash_sustainability", {}).get("ytd_observation", {})
+    if cash.get("status") == "available":
+        rows.append(["累計營業現金流", f"{cash['period_start']} 至 {cash['period_end']}",
+                     f"{cash['values']['cfo_twd'] / 1e8:,.2f} 億元"])
+    return rows
+
+
 def debate_rows(data, material_only=False):
     debate = data.get("debate_review", {})
     openings, replies = debate.get("openings", {}), debate.get("replies", {})

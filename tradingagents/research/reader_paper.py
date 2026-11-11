@@ -92,6 +92,11 @@ def render_pdf(directory, font_path):
     conditions = data.get("debate_review", {}).get("judgment", {}).get("revision_conditions", [])
     if conditions and data.get("workflow_review"):
         story.append(p("優先改判條件｜" + conditions[0], "small"))
+    from .fixed_reading import reviewed_financial_rows
+
+    reviewed_financial = reviewed_financial_rows(data)
+    if reviewed_financial:
+        story.append(table(["已核財務", "期間", "數值"], reviewed_financial, [40*mm, 58*mm, 82*mm]))
     if reader.get("latest_verified_quarter_end"):
         story.append(p("最新已核合併單季財務期間截至 " + reader["latest_verified_quarter_end"] + "。", "small"))
     from .reader_research import post_close_ruling_text
