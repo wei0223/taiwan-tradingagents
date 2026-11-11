@@ -9,6 +9,43 @@ from tradingagents.dataflows.taiwan.publications import TAIPEI
 from .scenarios import finite, timestamp
 
 
+def same_day_capture(payload, dataset, stock, expected, cutoff):
+    """Identify a same-day response excluded by the historical normalization policy."""
+    from tradingagents.dataflows.taiwan.extensions import ADJUSTED, normalize
+    from tradingagents.dataflows.taiwan.provider import INSTITUTIONS, TaiwanMarketDataProvider
+
+    try:
+        captured = timestamp(payload["retrieved_at"])
+        local = captured.astimezone(TAIPEI)
+        if captured > cutoff or local.date().isoformat() != expected or (local.hour, local.minute) < (16, 30):
+            return None
+        if payload.get("dataset") != dataset or payload.get("stock_id") != stock:
+            return None
+        rows = [row for row in payload.get("raw_rows", []) if row.get("date") == expected]
+        if not rows or any(row.get("stock_id") != stock for row in rows):
+            return None
+        if dataset == INSTITUTIONS:
+            names = {TaiwanMarketDataProvider._normalize(dataset, row)[1]["name"] for row in rows}
+            if len(names) != len(rows) or not {"Foreign_Investor", "Foreign_Dealer_Self", "Investment_Trust"} <= names:
+                return None
+            if not (("Dealer" in names and not names & {"Dealer_self", "Dealer_Hedging"})
+                    or ("Dealer" not in names and {"Dealer_self", "Dealer_Hedging"} <= names)):
+                return None
+        else:
+            if len(rows) != 1:
+                return None
+            if dataset == ADJUSTED:
+                normalize(dataset, rows[0])
+            else:
+                TaiwanMarketDataProvider._normalize(dataset, rows[0])
+    except (ValueError, KeyError, TypeError, OverflowError):
+        return None
+    from .bundle import fingerprint
+
+    return {"data_date": expected, "captured_at": captured.isoformat(),
+            "rows": len(rows), "raw_rows_sha256": fingerprint(rows)}
+
+
 def market_gate(snapshot, cutoff):
     """Require an official calendar through the last completed settlement window.
 
@@ -54,6 +91,7 @@ def market_gate(snapshot, cutoff):
         sessions = []
 
     dates, groups = {}, {}
+    excluded_captures = {}
     all_rows = {}
     for name, payload in (
         ("ohlcv", snapshot.get("datasets", {}).get("TaiwanStockPrice", {})),
@@ -68,6 +106,14 @@ def market_gate(snapshot, cutoff):
         dates[name] = max((r["data_date"] for r in rows), default=None)
         if expected is None or dates[name] != expected:
             reasons.append(name + "_not_at_expected_session")
+            if expected == snapshot.get("as_of"):
+                dataset = {
+                    "ohlcv": "TaiwanStockPrice", "adjusted": "TaiwanStockPriceAdj",
+                    "institutions": "TaiwanStockInstitutionalInvestorsBuySell",
+                }[name]
+                capture = same_day_capture(payload, dataset, snapshot["instrument"]["stock_id"], expected, instant)
+                if capture is not None:
+                    excluded_captures[name] = capture
         if any(timestamp(r["retrieved_at"]) > instant for r in rows):
             reasons.append(name + "_captured_after_cutoff")
     names = {
@@ -119,6 +165,7 @@ def market_gate(snapshot, cutoff):
         "calendar_required_through": end.isoformat(),
         "expected_last_session": expected,
         "last_dates": dates,
+        "same_day_captures_outside_signal_inputs": excluded_captures,
         "institution_groups": groups,
         "technical_date": technical_date,
         "price_basis": {"ohlcv": "unadjusted", "adjusted": "vendor_adjusted_not_total_return"},
