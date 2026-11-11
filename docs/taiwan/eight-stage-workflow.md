@@ -140,3 +140,9 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 使用合格未還原收盤價及模型明示的倍數，分列 EPS × 倍數的條件價格、現價除以倍數所需的 EPS、相對已公布四季 EPS 的所需變化，以及基準情境與現價要求的差。供應商歷史倍數另列為描述性背景，分母未驗證時不升格成估值錨。採用的公司假設、倍數理由及風險保留在證據包。缺模型、缺合格價格或口徑不一致時保留缺值。
 
 企業中長期判斷、估值與短期價格觀察分開呈現，保留原主張的推論審查狀態。
+
+## STEP 6 條件式交易研究
+
+單次報告附上 `decision-conditions.json`。價量採已驗固定技術觀察，使用前二十交易日高點、量比與同週完整週收盤。法人要求同截止日、分類完整的五交易日外資淨額為正。獲利門檻須綁定同公司最新已核、合併單季直接稀釋 EPS。新財報、更正或重大公告後重驗獲利條件。企業中長期估值另見 valuation-scenarios.json。
+
+選填 extension_input.decision_conditions，含 stock_id、as_of、rationale、entry_twd、invalidation_twd、target_twd、entry_cost_bps、exit_cost_bps，以及 earnings.fact_id 與 earnings.minimum_eps_twd。成本為情境輸入，買賣各自明示，沒有預填費率。報酬與損失以成本後每股差額衡量；沒有正報酬或條件不齊時維持 observe。待驗證候選使用確認後首個官方交易日起算五日與二十日，並保留原失效門檻。結果為未成交的研究情境。

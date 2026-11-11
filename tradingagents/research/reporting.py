@@ -759,6 +759,11 @@ def package(
         from .valuation_horizons import build as build_horizons
 
         result["valuation_scenarios"], result["horizon_analysis"] = build_horizons(result, fixed_company)
+        from .decision_conditions import build as build_conditions
+
+        result["decision_conditions"] = build_conditions(
+            result, fixed_company, (extension_input or {}).get("decision_conditions"),
+        )
         result["reader_pdf_requested"] = pdf_font is not None
         audit_page = page
         if fixed_technical is not None:
@@ -790,6 +795,7 @@ def package(
         write_json(output / "reader-research.json", result["reader_research"])
         write_json(output / "valuation-scenarios.json", result["valuation_scenarios"])
         write_json(output / "horizon-analysis.json", result["horizon_analysis"])
+        write_json(output / "decision-conditions.json", result["decision_conditions"])
         reader_sources = (extension_input or {}).get("reader_research", {}).get("sources", {})
         for source in reader_sources.values():
             target = output / "reader-sources" / (source["sha256"] + ".pdf")
