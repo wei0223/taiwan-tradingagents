@@ -152,3 +152,11 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 正式 v2 單次研究的 HTML、PDF 與證據包交付時，自動附上 `forecast-record.json` 與 `forecast-manifest.json`。每次交付使用唯一研究 ID；清單綁定資料、來源、模型、提示、Agent 內容及報告。審查結論、信心、條件、預測期間及失效規則採交付當下的既有結果。派工介面未回傳模型版本時，欄位保留 null。
 
 用 `research-archive-audit --report-dir <報告目錄>` 驗證。重作或修正時須使用新報告目錄。可在 extension_input.research_supersedes 指定上一版報告的本機目錄；程式先驗證上一版，再保存其 ID、版本和清單雜湊。回顧重播按實際產出時間封存，標記 ineligible_retrospective。當次具備待驗條件的研究標記 pending，其他標記 not_applicable。檔案以新增方式建立，雜湊可揭露後續修改；原始正式預測發布流程及舊封存維持原版本。
+
+## STEP 8 手動實績評分
+
+使用 `research-score --report-dir <封存報告> --output-dir <新目錄>`。可重複傳入 --report-dir 批次驗證；--market-snapshot 可提供各公司及基準的已捕獲資料，--benchmark 明示基準（預設 0050，作為市場代理），--actuals 選填已選版實績。評分輸出 forecast-evaluation.json 與 research-performance-summary.json，原封存保持原版本。正式預測發布仍用既有 track-release 入口。
+
+行情依已驗官方交易日，從封存確認後下一個交易日開盤至第 5 或第 20 個交易日收盤。程式核對還原行情原列，計算個股及基準報酬、超額、MFE／MAE 與成本敏感度。若封存晚於首日開盤、缺必要行情、或原始價與還原價比例變動，保留相應不可用欄位。成本後數字為固定觀察視窗的敏感度。門檻與目標採收盤檢查。法人以同窗起始五日、已核原列及完整外資分類為準。未觀測到完整期限保留 pending。
+
+季度 EPS 與營收只對已封存的同公司、同季度與同口徑條件模型比較。實績需來自支援的交易所或 MOPS 原件，採既有初次公布資格，另附具名 reviewer、source_quote、raw_value、source_page 與 multiplier。程式核對原件雜湊、頁面引句及單位換算。首發版本與欄位語意仍需審查者核對。修訂、Mock、缺證或研究發布前已公開的實績無法進入主比較。輸出記錄可觀察的失效與缺口；不同視窗及同季多情境有重疊。

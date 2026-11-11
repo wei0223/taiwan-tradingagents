@@ -247,8 +247,21 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     reasoning.add_argument("--output-dir", type=Path, required=True)
     archive_audit = commands.add_parser("research-archive-audit", help="Verify an immutable one-shot research archive")
     archive_audit.add_argument("--report-dir", type=Path, required=True)
+    scoring = commands.add_parser("research-score", help="Manually evaluate one or more immutable research editions")
+    scoring.add_argument("--report-dir", type=Path, action="append", required=True)
+    scoring.add_argument("--market-snapshot", type=Path, action="append", default=[])
+    scoring.add_argument("--actuals", type=Path)
+    scoring.add_argument("--benchmark", default="0050")
+    scoring.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "research-score":
+            from .research_outcomes import score_reports
+
+            summary = score_reports(args.report_dir, [load_json(p) for p in args.market_snapshot],
+                                    load_json(args.actuals) if args.actuals else [], args.benchmark, args.output_dir)
+            print(json.dumps(summary, ensure_ascii=False))
+            return 0
         if args.command == "research-archive-audit":
             from .forecast_journal import read_research
 
