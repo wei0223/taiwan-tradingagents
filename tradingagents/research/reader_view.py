@@ -52,6 +52,11 @@ def render(data, notes, snapshot, table):
     conditions = data.get("debate_review", {}).get("judgment", {}).get("revision_conditions", [])
     if conditions and data.get("workflow_review"):
         out += "<p><strong>優先改判條件</strong> " + prose(conditions[0]) + "</p>"
+    from .fixed_reading import reviewed_financial_rows
+
+    reviewed_financial = reviewed_financial_rows(data)
+    if reviewed_financial:
+        out += table(["已核財務", "期間", "數值"], reviewed_financial)
     if reader.get("latest_verified_quarter_end"):
         out += "<p>最新已核合併單季財務期間截至 " + esc(reader["latest_verified_quarter_end"]) + "。</p>"
     from .reader_research import post_close_ruling_text
