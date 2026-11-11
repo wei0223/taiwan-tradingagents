@@ -148,6 +148,12 @@ def render_pdf(directory, font_path):
             story.append(p(" × ".join(DIMENSION_LABELS[d] for d in relation["dimensions"]) + "：" + relation["explanation"] + "；" + relation["impact"]))
         decisions = workflow["supplement"]["decisions"]
         story.append(p("補查沒有新增查詢。" if not decisions else "；".join(k + "：" + v["status"] + "／" + v["reason"] for k, v in decisions.items()), "small"))
+    if "expectation_gap" in data:
+        from .market_expectations import display_rows as gap_rows
+
+        story.append(p("資料品質與市場預期差", "h2"))
+        story.append(p("資料可用性：" + data["data_quality"]["status"], "small"))
+        story.append(table(["指標", "狀態", "實績減共識／缺口"], gap_rows(data["expectation_gap"])))
     if "public_eps" in data:
         from .public_eps import display_rows
         consensus = data["public_eps"]

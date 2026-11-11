@@ -116,3 +116,11 @@ planner 驗收後、workflow-bind 前，執行 company-intake --snapshot 本次s
 交付包提供 `agent-access-policy.json` 與 `agent-execution-audit.json`，可另用 `workflow-audit --run <agents> --execution-output-dir <新目錄>` 重驗。程式核對實際封存的派工提示、指定輸入、已發布依賴、接受順序、角色與收據。多空開場使用新上下文，雙方皆接受後才交由原角色反駁。
 
 Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收據，結果為 limited，檔案系統強制存取控制尚未實作。封存資料無法證明工具外傳遞或角色實際讀取範圍。收據缺漏、上下文重用或未發布論點出現在派工包時拒收。Mock 與無法完成派工的研究不能取得 limited 通關。
+
+## STEP 3 資料品質與市場預期差
+
+單次正式報告的證據包包含 `data-quality-report.json` 與 `expectation-gap.json`。前者列出資料可用性、期間、原件雜湊、版本、公布與擷取時間。資料集逐筆來源可由 `research.json` 的 source_audit.lineage 追溯。公司欄位則保留事實 ID、原件 ID 與頁碼。未知時間保留空值；截止日後捕獲的供應商版本另列為回顧資料。
+
+預期差只使用同公司、同指標、同期、同合併範圍與同單位的實績及共識中位數。EPS 還須區分基本及稀釋。共識的原件須在已驗證首次實績公布前捕獲。百分比以共識絕對值為分母；零共識只列絕對差。共識口徑未確認、首次公布時點缺證、缺來源或版本衝突時保留 unavailable。公司展望與 AI 假設另列來源類別。
+
+目前單次報告的共識來源為公開 FactSet 年度 EPS 轉引，仍保留轉引原文未證實的口徑。營收欄位在缺少核可共識來源時顯示 unavailable。公司資料庫的目前版本尚不能自動證實首次公布時點。可比較的 EPS 及營收差額算法已用固定輸入驗證。
