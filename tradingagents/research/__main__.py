@@ -257,8 +257,28 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     impact.add_argument("--report-dir", type=Path, required=True)
     impact.add_argument("--evaluation", type=Path, required=True)
     impact.add_argument("--output-dir", type=Path, required=True)
+    experiment = commands.add_parser("research-mode-plan", help="Freeze four-mode research comparison inputs")
+    experiment.add_argument("--calibration-report", type=Path, action="append", default=[])
+    experiment.add_argument("--holdout-report", type=Path, action="append", default=[])
+    experiment.add_argument("--model")
+    experiment.add_argument("--randomness")
+    experiment.add_argument("--output-dir", type=Path, required=True)
+    modes = commands.add_parser("research-mode-compare", help="Compare paired results from a frozen experiment")
+    modes.add_argument("--plan", type=Path, required=True)
+    modes.add_argument("--run-result", type=Path, action="append", default=[])
+    modes.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command in {"research-mode-plan", "research-mode-compare"}:
+            from .mode_experiment import compare_files, freeze
+
+            if args.command == "research-mode-plan":
+                plan = freeze(args.calibration_report, args.holdout_report, args.output_dir, args.model, args.randomness)
+                result = {"plan_sha256": plan["plan_sha256"], "cells": len(plan["cells"])}
+            else:
+                result = compare_files(args.plan, args.run_result, args.output_dir)
+            print(json.dumps(result, ensure_ascii=False))
+            return 0
         if args.command == "research-debate-impact":
             from .debate_impact import link
 

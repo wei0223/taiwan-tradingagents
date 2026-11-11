@@ -166,3 +166,13 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 單次正式報告附 debate-impact.json。從已驗收紀錄保存各面向及總體多空的開場、原角色反駁、被反駁主張、前後立場及最終裁決。立場變動須有具名反駁及引用才能標為已連結。信心只比較完全相同的主張文字及時間尺度；缺可比項目時標 unavailable。新增引證、爭議及補查版本另列，不能單憑引證變多認定證據改善。最終裁決的改判聲明保留原 ID 及審查狀態。
 
 用 research-debate-impact --report-dir <封存報告> --evaluation <forecast-evaluation.json> --output-dir <新目錄> 另存實績連結。程式核對研究 ID、原清單雜湊與評分內容雜湊，並保留 pending 或 unavailable 狀態。實績連結本身不能證明辯論效益。
+
+## STEP 10 四模式對照
+
+以 research-mode-plan --calibration-report <報告> --holdout-report <報告> --output-dir <新目錄> 凍結實驗，可重複提供案例。程式驗證原封存，複製六種共同輸入並記錄雜湊。事先分配校準與保留案例，同公司同日或同快照不得重複。沒有合格保留案例時可建立試點計畫。--model 與 --randomness 只填已能確認的執行設定。
+
+模式分別為單 AI 整合、三面向獨立分析後綜合、三面向加整體多空交鋒，以及完整八階段。按 ablation-plan.json 的 modes 執行，來源限制與資料截止日一致。各模式產出相同欄位 stock_id、as_of、stance、summary、claims、counterevidence、limits、invalidation。盲審時僅交共同資料與去除模式標記的輸出，由同一審查者對共同案例評分。
+
+用 research-mode-compare --plan <ablation-plan.json> --run-result <執行紀錄.json> --output-dir <新目錄> 比較，可重複傳入執行紀錄。每筆執行含 cell_id、mode、plan_sha256、input_sha256、started_at、finished_at、status、model_control、randomness_control、dispatches、retries。完成時附 output 與 output_sha256，盲審附 review（reviewer、blind、rubric_sha256、output_sha256、ratings、inference_errors、material_omissions）。run_sha256 與 output_sha256 採專案 canonical fingerprint。無法核對的觀測值留 null，未執行的模式保持 pending。
+
+只有凍結後執行、四模式齊全、控制一致且共同盲審的保留案例才彙總品質與耗時等均值。執行控制與盲審由記錄者具名提供，程式只查核契約及內容雜湊。先前八階段紀錄僅列試點。歷史績效須另外取得四模式事前封存與可比實績；本入口目前保留不可用，不以事後重跑補造。Token 與實際 API 成本在缺乏工具資料時留 null。
