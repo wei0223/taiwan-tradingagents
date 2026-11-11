@@ -77,7 +77,7 @@ def catalog():
     return specs
 
 
-def history_audit(snapshot):
+def history_audit(snapshot, *, include_as_of=False):
     """Require 1000 consecutive OFFICIAL sessions; no weekday or stock-row inference."""
     from tradingagents.dataflows.taiwan.calendar import verify_calendar
 
@@ -100,8 +100,11 @@ def history_audit(snapshot):
         < (date.fromisoformat(cutoff) - timedelta(days=1)).isoformat()
     ):
         return {**result, "reasons": ["official_calendar_does_not_cover_cutoff"]}
+    def eligible_date(day):
+        return day < cutoff or (include_as_of and day == cutoff)
+
     sessions = [
-        d for d in verify_calendar(calendar, snapshot["instrument"]["exchange"]) if d < cutoff
+        d for d in verify_calendar(calendar, snapshot["instrument"]["exchange"]) if eligible_date(d)
     ]
     rows = dataset.get("records", [])
     identities = [r["data_date"] for r in rows]
@@ -114,7 +117,7 @@ def history_audit(snapshot):
     for row in rows:
         if row.get("stock_id") != snapshot["instrument"]["stock_id"]:
             raise ValueError("Price company mismatch")
-        if row["data_date"] >= cutoff:
+        if not eligible_date(row["data_date"]):
             continue
         available = row.get("available_at", row["data_date"])
         available_time = _end_of_day(available) if len(available) == 10 else timestamp(available)
@@ -464,7 +467,10 @@ def _weekly(rows, calendar, cutoff):
 
 
 def build(snapshot):
-    check = history_audit(snapshot)
+    from .market_observation import post_close_inputs
+
+    snapshot, captures = post_close_inputs(snapshot)
+    check = history_audit(snapshot, include_as_of=captures is not None)
     package = {
         "schema_version": 1,
         "engine_version": ENGINE_VERSION,
@@ -478,6 +484,7 @@ def build(snapshot):
                 "prices": snapshot["datasets"].get("TaiwanStockPrice"),
                 "adjusted": snapshot.get("extensions", {}).get("TaiwanStockPriceAdj"),
                 "calendar": snapshot.get("market_calendar"),
+                **({"post_close_captures": captures} if captures else {}),
             }
         ),
         "history": check,
@@ -506,10 +513,21 @@ def build(snapshot):
         # Validate adjusted OHLC/date/time too, before calculating a second independent basis.
         proxy = copy.deepcopy(snapshot)
         proxy["datasets"]["TaiwanStockPrice"]["records"] = adjusted
-        if history_audit(proxy)["status"] == "passed":
+        if history_audit(proxy, include_as_of=captures is not None)["status"] == "passed":
             package["price_series"]["vendor_adjusted"] = _calculate(
                 [adj[d] for d in selected], "vendor_adjusted"
             )
+    if captures:
+        from tradingagents.dataflows.taiwan.calculations import institutional_metrics
+
+        flow = institutional_metrics(
+            snapshot["datasets"]["TaiwanStockInstitutionalInvestorsBuySell"]["records"], rows[-20:],
+            snapshot["instrument"]["exchange"],
+        )
+        package["post_close_observation"] = {
+            "data_date": snapshot["as_of"], "captures": captures, "institutions": flow,
+            "trade_signal_issued": False,
+        }
     weeks, incomplete = _weekly(rows, snapshot["market_calendar"]["sessions"], snapshot["as_of"])
     package["weekly"] = {
         "complete": _calculate(weeks, "raw", True) if weeks else None,

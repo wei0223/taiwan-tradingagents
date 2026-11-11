@@ -54,3 +54,63 @@ def latest(snapshot, ctx):
         "trade_signal_issued": False,
         "limitation": "Separate current-capture observation; never backdate it or relabel original adjusted next-day signals",
     }
+
+
+def post_close_inputs(snapshot):
+    """Build a calculation-only view from the three aligned source captures."""
+    import copy
+    import json
+    from datetime import date
+
+    from tradingagents.dataflows.taiwan.calendar import month_sessions, verify_calendar
+    from tradingagents.dataflows.taiwan.extensions import ADJUSTED, normalize
+    from tradingagents.dataflows.taiwan.provider import INSTITUTIONS
+
+    from .publishing import market_gate
+    from .review import _end_of_day
+
+    day = snapshot["as_of"]
+    calendar = snapshot.get("market_calendar", {})
+    if calendar.get("status") != "ok" or calendar.get("end", "")[:7] != day[:7]:
+        return snapshot, None
+    inputs = {
+        "ohlcv": ("datasets", PRICE),
+        "adjusted": ("extensions", ADJUSTED),
+        "institutions": ("datasets", INSTITUTIONS),
+    }
+    if any(not snapshot.get(group, {}).get(dataset, {}).get("raw_rows")
+           for group, dataset in inputs.values()):
+        return snapshot, None
+    gate = market_gate(snapshot, _end_of_day(day).isoformat())
+    captures = gate["same_day_captures_outside_signal_inputs"]
+    if captures.keys() != inputs.keys() or any(
+        reason.endswith("_captured_after_cutoff") for reason in gate["reasons"]
+    ):
+        return snapshot, None
+    view = copy.deepcopy(snapshot)
+    exchange = snapshot["instrument"]["exchange"]
+    month = date.fromisoformat(day).replace(day=1)
+    query = month.strftime("%Y%m%d" if exchange == "twse" else "%Y/%m/%d")
+    original = next(a for a in calendar["archives"] if a["query"]["date"] == query)
+    dates = month_sessions(json.loads(original["raw_response_utf8"].lstrip("\ufeff")), exchange, month)
+    view["market_calendar"]["end"] = day
+    view["market_calendar"]["sessions"] = sorted(
+        set(calendar["sessions"]) | {d.isoformat() for d in dates if d.isoformat() <= day}
+    )
+    verify_calendar(view["market_calendar"], exchange)
+    for key, (group, dataset) in inputs.items():
+        payload = view[group][dataset]
+        for raw in payload["raw_rows"]:
+            if raw["date"] != day:
+                continue
+            period, values, units = (
+                normalize(dataset, raw) if dataset == ADJUSTED
+                else TaiwanMarketDataProvider._normalize(dataset, raw)
+            )
+            payload["records"].append({
+                "stock_id": raw["stock_id"], "dataset": dataset, "data_date": day,
+                "period": period, "values": values, "units": units, "raw": raw,
+                "retrieved_at": captures[key]["captured_at"], "available_at": captures[key]["captured_at"],
+                "published_at": None, "source": f"FinMind:{dataset}",
+            })
+    return view, captures

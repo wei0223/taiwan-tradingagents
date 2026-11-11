@@ -411,7 +411,10 @@ def package(
         market_names = {"ohlcv": "原始價", "adjusted": "還原價", "institutions": "三大法人"}
         captured = "、".join(market_names[key] for key in captured_market)
         market_day = publication["latest_market_gate"]["expected_last_session"]
-        summary += f"<p>{market_day} 盤後來源回應已取得{captured}。正式指標依既有日線口徑計算至前一交易日。</p>"
+        post_close = (fixed_technical or {}).get("post_close_observation", {})
+        note = ("固定日線指標已使用盤後資料，短線交易裁決仍受正式輸入門檻限制。"
+                if post_close.get("data_date") == market_day else "本次固定指標尚未採用盤後資料。")
+        summary += f"<p>{market_day} 盤後來源回應已取得{captured}。{note}</p>"
     summary += '<p><a href="review.json">分項計算與條件</a> · <a href="review-input.json">原件、公布／取得時間與版本</a></p>'
     summary += table(
         ["檢核面向", "結果"],
