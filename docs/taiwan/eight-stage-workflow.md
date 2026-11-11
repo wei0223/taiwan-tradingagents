@@ -176,3 +176,11 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 用 research-mode-compare --plan <ablation-plan.json> --run-result <執行紀錄.json> --output-dir <新目錄> 比較，可重複傳入執行紀錄。每筆執行含 cell_id、mode、plan_sha256、input_sha256、started_at、finished_at、status、model_control、randomness_control、dispatches、retries。完成時附 output 與 output_sha256，盲審附 review（reviewer、blind、rubric_sha256、output_sha256、ratings、inference_errors、material_omissions）。run_sha256 與 output_sha256 採專案 canonical fingerprint。無法核對的觀測值留 null，未執行的模式保持 pending。
 
 只有凍結後執行、四模式齊全、控制一致且共同盲審的保留案例才彙總品質與耗時等均值。執行控制與盲審由記錄者具名提供，程式只查核契約及內容雜湊。先前八階段紀錄僅列試點。歷史績效須另外取得四模式事前封存與可比實績；本入口目前保留不可用，不以事後重跑補造。Token 與實際 API 成本在缺乏工具資料時留 null。
+
+## STEP 11 流程與成本
+
+正式報告附 workflow-optimization.json。依封存派工收據列出工作、可觀測派工、受限狀態及具 ID 的核心與改判貢獻。耗時只採明示起訖；未取得的重試、失敗率、Token 與成本保留 null。封存無法判定實際失敗的呼叫時，unavailable 工作只列為不可用。
+
+匯出重用已核的來源內容，在暫存副本做完整驗證並與報告使用的狀態雜湊核對，再交付新目錄。正式流程保留八階段和多空各自新上下文。補查沿用單輪最多 3 題、9 次 HTTP、3 份 PDF，失敗留證據缺口。
+
+research-workflow-cost --comparison <research-mode-comparison.json> --output-dir <新目錄> 輸出 cost-comparison.json。比較只採 STEP 10 共同保留案例，品質容忍度先列零點。合格樣本不足時保留完整流程，證據齊全時的描述比較也須另作獨立品質驗收後才能調整角色。工程匯出量測與模型成本分開。

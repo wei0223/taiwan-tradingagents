@@ -748,6 +748,13 @@ def package(
         from .debate_impact import build as build_debate_impact
 
         result["debate_impact"] = build_debate_impact(fixed_agents, validation)
+        from tradingagents.dataflows.taiwan.source_store import SourceStore
+
+        from .workflow_optimization import observations
+
+        result["workflow_optimization"] = observations(
+            SourceStore.path(extension_input["agent_run"]), fixed_agents, result["debate_impact"],
+        )
         for face in result["workflow_review"]["core"]["faces"]:
             verdict = validation["claims"].get(face["claim_id"])
             face["reasoning_label"] = LABELS[verdict["status"]] if verdict else LABELS["insufficient"]
@@ -862,9 +869,13 @@ def package(
     if fixed_agents:
         if fixed_agents["protocol"] == "taiwan-eight-stage-v2":
             from .eight_stage import export as export_agents
+
+            export_agents(extension_input["agent_run"], output / "agent-run",
+                          expected_state_sha256=fixed_agents["source_state_sha256"])
         else:
             from .agent_protocol import export as export_agents
-        export_agents(extension_input["agent_run"], output / "agent-run")
+
+            export_agents(extension_input["agent_run"], output / "agent-run")
         write_json(output / "agent-protocol-review.json", result["agent_protocol_review"])
     write_json(output / "bundle.json", bundle)
     if sealed is not None:
@@ -907,6 +918,7 @@ def package(
         write_json(output / "reasoning-audit.json", result["reasoning_audit"])
         write_json(output / "claim-validation.json", result["claim_validation"])
         write_json(output / "debate-impact.json", result["debate_impact"])
+        write_json(output / "workflow-optimization.json", result["workflow_optimization"])
         if "agent_access_policy" in workflow_review:
             write_json(output / "agent-access-policy.json", workflow_review["agent_access_policy"])
             write_json(output / "agent-execution-audit.json", workflow_review["agent_execution_audit"])
