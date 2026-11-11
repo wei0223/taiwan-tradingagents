@@ -54,6 +54,11 @@ def render(data, notes, snapshot, table):
         out += "<p><strong>優先改判條件</strong> " + prose(conditions[0]) + "</p>"
     if reader.get("latest_verified_quarter_end"):
         out += "<p>最新已核合併單季財務期間截至 " + esc(reader["latest_verified_quarter_end"]) + "。</p>"
+    from .reader_research import post_close_ruling_text
+
+    post_close_ruling = post_close_ruling_text(data)
+    if post_close_ruling:
+        out += "<p><strong>盤後短線裁決</strong> " + prose(post_close_ruling) + "</p>"
     if reader.get("short_term_check") and data.get("fixed_pipeline"):
         from .reader_research import short_term_text
         out += "<p><strong>固定短線觀察</strong> " + prose(short_term_text(reader["short_term_check"])) + "</p>"

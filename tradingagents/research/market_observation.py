@@ -56,7 +56,7 @@ def latest(snapshot, ctx):
     }
 
 
-def post_close_inputs(snapshot):
+def post_close_inputs(snapshot, cutoff=None):
     """Build a calculation-only view from the three aligned source captures."""
     import copy
     import json
@@ -81,7 +81,8 @@ def post_close_inputs(snapshot):
     if any(not snapshot.get(group, {}).get(dataset, {}).get("raw_rows")
            for group, dataset in inputs.values()):
         return snapshot, None
-    gate = market_gate(snapshot, _end_of_day(day).isoformat())
+    cutoff = min(cutoff, _end_of_day(day)) if cutoff is not None else _end_of_day(day)
+    gate = market_gate(snapshot, cutoff.isoformat())
     captures = gate["same_day_captures_outside_signal_inputs"]
     if captures.keys() != inputs.keys() or any(
         reason.endswith("_captured_after_cutoff") for reason in gate["reasons"]
@@ -113,4 +114,5 @@ def post_close_inputs(snapshot):
                 "retrieved_at": captures[key]["captured_at"], "available_at": captures[key]["captured_at"],
                 "published_at": None, "source": f"FinMind:{dataset}",
             })
+    view["technical"] = technical(view["datasets"][PRICE]["records"])
     return view, captures
