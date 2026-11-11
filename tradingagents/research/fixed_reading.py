@@ -12,12 +12,24 @@ VERDICTS = {"supported": "獲支持", "challenged": "受挑戰", "uncertain": "�
 def ruling_rows(data):
     rows = data.get("debate_review", {}).get("judgment", {}).get("rulings", [])
     validation = data.get("claim_validation", {}).get("claims", {})
-    if not validation:
-        return [[AXES[r["axis"]], VERDICTS[r["verdict"]], r["reason"]] for r in rows]
     from .reasoning_audit import LABELS
 
-    return [[AXES[r["axis"]], LABELS[validation["decision.ruling_" + r["axis"]]["status"]],
-             r["reason"]] for r in rows]
+    axes = data.get("review", {}).get("axes", {})
+    result = []
+    for row in rows:
+        axis = row["axis"]
+        verdict = LABELS[validation["decision.ruling_" + axis]["status"]] if validation else VERDICTS[row["verdict"]]
+        reason = row["reason"]
+        observation = axes.get(axis, {}).get("reviewed_observation")
+        if observation:
+            values = observation["values"]
+            period = f"{observation['period_start']} 至 {observation['period_end']}"
+            if axis == "accounting_earnings":
+                reason += f" 原件單季（{period}）歸母淨利 {values['parent_profit'] / 1e8:,.2f} 億元、報列稀釋 EPS {values['diluted_eps']:,.2f} 元。"
+            elif axis == "cash_sustainability":
+                reason += f" 原件累計（{period}）營業現金流 {values['cfo'] / 1e8:,.2f} 億元。"
+        result.append([AXES[axis], verdict, reason])
+    return result
 
 
 def debate_rows(data, material_only=False):

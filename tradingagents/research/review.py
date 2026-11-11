@@ -268,7 +268,7 @@ def _attempt(function, *args):
         return {"status": "unavailable", "reason": str(exc)}
 
 
-def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, snapshot=None, technical_gate=None):
+def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, snapshot=None, technical_gate=None, company=None):
     """A report always carries four independent axes, including explicit missingness."""
     data = inputs or {}
     now = (clock or (lambda: datetime.now(UTC)))()
@@ -380,6 +380,14 @@ def review(stock, as_of, inputs=None, model=None, short_term=None, clock=None, s
         "orders": False,
         "llm_api_calls": False,
     }
+    if company is not None:
+        from .financial_core import reviewed_observations
+
+        if (company["stock_id"], company["as_of"]) != (stock, as_of):
+            raise ValueError("Reviewed observations company/cutoff mismatch")
+        for axis, observation in reviewed_observations(company, cutoff).items():
+            if observation is not None:
+                result["axes"][axis]["reviewed_observation"] = observation
     result["review_sha256"] = fingerprint(result)
     return result
 

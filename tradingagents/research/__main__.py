@@ -680,7 +680,10 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
                     write_json(folder / "snapshot.json", snapshot)
                     summary.append({"symbol": symbol, "status": "prepared" if not args.fixed_technical or snapshot["fixed_technical"]["status"] == "ready" else "prepared_technical_blocked", "path": folder.name,
                                     "bundle_sha256": fingerprint(bundle),
-                                    "critical_data_missing": bundle["requires_insufficient_data"]})
+                                    "critical_data_missing": bundle["requires_insufficient_data"],
+                                    **({"technical_history_reasons": snapshot["fixed_technical"].get("history", {}).get("reasons", []),
+                                        "calendar_status": snapshot.get("market_calendar", {}).get("status")}
+                                       if args.fixed_technical else {})})
                 except (VendorError, ValueError, KeyError, TypeError):
                     summary.append({"symbol": symbol, "status": "unavailable"})
             args.output_dir.mkdir(parents=True, exist_ok=True)

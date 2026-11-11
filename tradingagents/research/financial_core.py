@@ -15,6 +15,50 @@ RATIOS = {
 }
 
 
+def reviewed_observations(company, cutoff):
+    """Expose directly reported values without granting reconstructed EPS or cash-flow eligibility."""
+    from .scenarios import timestamp
+
+    groups = {}
+    for fact in company["facts"]:
+        source = company["sources"][fact["source_id"]]
+        if (
+            fact["kind"] != "numeric"
+            or fact["scope"] != "consolidated"
+            or fact.get("derivation") != "direct"
+            or fact["basis"] not in {"single_quarter", "ytd"}
+            or fact["period_end"] > company["as_of"]
+            or max(timestamp(source["available_from"]), timestamp(fact["reviewed_at"])) > cutoff
+        ):
+            continue
+        key = (fact["basis"], fact["period_start"], fact["period_end"], fact["source_sha256"])
+        groups.setdefault(key, {})[fact["metric"]] = fact
+
+    def observation(basis, units):
+        matches = [
+            (start, end, source, facts)
+            for (row_basis, start, end, source), facts in groups.items()
+            if row_basis == basis and all(facts.get(k, {}).get("unit") == u for k, u in units.items())
+        ]
+        if not matches:
+            return None
+        latest = max(row[1] for row in matches)
+        editions = [row for row in matches if row[1] == latest]
+        if len(editions) != 1:
+            return None
+        start, end, source, facts = editions[0]
+        return {"basis": basis, "period_start": start, "period_end": end, "source_sha256": source,
+                "values": {k: float(facts[k]["normalized_value"]) for k in units},
+                "source_fact_ids": [facts[k]["id"] for k in units]}
+
+    return {
+        "accounting_earnings": observation("single_quarter", {
+            "revenue": "TWD", "operating_profit": "TWD", "parent_profit": "TWD", "diluted_eps": "TWD/share",
+        }),
+        "cash_sustainability": observation("ytd", {"revenue": "TWD", "cfo": "TWD"}),
+    }
+
+
 def build(company):
     groups = {}
     for fact in company["facts"]:
