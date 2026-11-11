@@ -406,6 +406,12 @@ def package(
     summary += (
         "<p>不可用代表無法裁決，不是看空、零值或中性。完整數值與來源見審查附錄；本流程不下單。</p>"
     )
+    captured_market = publication["latest_market_gate"]["same_day_captures_outside_signal_inputs"]
+    if captured_market:
+        market_names = {"ohlcv": "原始價", "adjusted": "還原價", "institutions": "三大法人"}
+        captured = "、".join(market_names[key] for key in captured_market)
+        market_day = publication["latest_market_gate"]["expected_last_session"]
+        summary += f"<p>{market_day} 盤後來源回應已取得{captured}。正式指標依既有日線口徑計算至前一交易日。</p>"
     summary += '<p><a href="review.json">分項計算與條件</a> · <a href="review-input.json">原件、公布／取得時間與版本</a></p>'
     summary += table(
         ["檢核面向", "結果"],
