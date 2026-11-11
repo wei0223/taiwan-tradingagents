@@ -245,8 +245,18 @@ def main(argv=None, provider=None, material_client=None, resolution_client=None)
     reasoning.add_argument("--run", type=Path, required=True)
     reasoning.add_argument("--review", type=Path)
     reasoning.add_argument("--output-dir", type=Path, required=True)
+    archive_audit = commands.add_parser("research-archive-audit", help="Verify an immutable one-shot research archive")
+    archive_audit.add_argument("--report-dir", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "research-archive-audit":
+            from .forecast_journal import read_research
+
+            record, manifest = read_research(args.report_dir)
+            print(json.dumps({"research_id": record["research_id"], "version": record["version"],
+                              "scoring_status": record["scoring_status"],
+                              "files_verified": len(manifest["files"])}))
+            return 0
         if args.command.startswith("workflow-"):
             from . import eight_stage as workflow
             if args.command == "workflow-prompt":

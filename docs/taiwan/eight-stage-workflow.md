@@ -146,3 +146,9 @@ Codex 角色共用工作區。目前驗收涵蓋上下文、派工輸入與收�
 單次報告附上 `decision-conditions.json`。價量採已驗固定技術觀察，使用前二十交易日高點、量比與同週完整週收盤。法人要求同截止日、分類完整的五交易日外資淨額為正。獲利門檻須綁定同公司最新已核、合併單季直接稀釋 EPS。新財報、更正或重大公告後重驗獲利條件。企業中長期估值另見 valuation-scenarios.json。
 
 選填 extension_input.decision_conditions，含 stock_id、as_of、rationale、entry_twd、invalidation_twd、target_twd、entry_cost_bps、exit_cost_bps，以及 earnings.fact_id 與 earnings.minimum_eps_twd。成本為情境輸入，買賣各自明示，沒有預填費率。報酬與損失以成本後每股差額衡量；沒有正報酬或條件不齊時維持 observe。待驗證候選使用確認後首個官方交易日起算五日與二十日，並保留原失效門檻。結果為未成交的研究情境。
+
+## STEP 7 本機研究封存
+
+正式 v2 單次研究的 HTML、PDF 與證據包交付時，自動附上 `forecast-record.json` 與 `forecast-manifest.json`。每次交付使用唯一研究 ID；清單綁定資料、來源、模型、提示、Agent 內容及報告。審查結論、信心、條件、預測期間及失效規則採交付當下的既有結果。派工介面未回傳模型版本時，欄位保留 null。
+
+用 `research-archive-audit --report-dir <報告目錄>` 驗證。重作或修正時須使用新報告目錄。可在 extension_input.research_supersedes 指定上一版報告的本機目錄；程式先驗證上一版，再保存其 ID、版本和清單雜湊。回顧重播按實際產出時間封存，標記 ineligible_retrospective。當次具備待驗條件的研究標記 pending，其他標記 not_applicable。檔案以新增方式建立，雜湊可揭露後續修改；原始正式預測發布流程及舊封存維持原版本。

@@ -78,7 +78,7 @@ def package(
 ):
     output = Path(output_dir)
     # Review editions must never overwrite a delivered report or a sealed source run.
-    protected = ("report.html", "research.json", "release-pointer.json", "snapshot.json")
+    protected = ("report.html", "research.json", "release-pointer.json", "snapshot.json", "forecast-record.json", "forecast-manifest.json")
     if any((output / name).exists() for name in protected):
         raise ValueError("Use a new output directory for every report/review edition")
     if actuals is not None and release_path is None:
@@ -323,6 +323,7 @@ def package(
         snapshot, result, extension_input, (review_input or {}).get("documents", {})
     )
     one_shot = (extension_input or {}).get("one_shot") is True
+    archive_research = bool(one_shot and fixed_agents and "workflow" in fixed_agents and fixed_agents["mode"] == "research")
     result["report_mode"] = "on_demand" if one_shot else "research_review"
     result["publishing_quality"] = publication
     result["publishing_status"] = publication["publishing_status"]
@@ -765,6 +766,7 @@ def package(
             result, fixed_company, (extension_input or {}).get("decision_conditions"),
         )
         result["reader_pdf_requested"] = pdf_font is not None
+        result["local_research_archive"] = archive_research
         audit_page = page
         if fixed_technical is not None:
             result["_technical_package"] = fixed_technical
@@ -851,7 +853,7 @@ def package(
         ],
     )
     write_json(output / "extension.json", extra)
-    write_json(output / "extension-input.json", extension_input or {})
+    write_json(output / "extension-input.json", {k: v for k, v in (extension_input or {}).items() if k != "research_supersedes"})
     write_json(output / "debate-review.json", debate_review)
     write_json(output / "debate-input.json", fixed_agents["results"] if fixed_agents else debate_input or {})
     if fixed_agents:
@@ -942,6 +944,10 @@ def package(
         dispositions = execute(result["v6_review"]["resolution_queue"], index_rows(docs), docs,
                                output/"source-repair"/"attempts", now=result["generated_at"], budget=0)
         write_json(output/"source-repair"/"resolution-run.json", dispositions)
+    if archive_research:
+        from .forecast_journal import seal_research
+
+        seal_research(output, result, (extension_input or {}).get("research_supersedes"))
     seal(output)
     if fixed_agents and "workflow" in fixed_agents:
         from .delivery import audit_package
