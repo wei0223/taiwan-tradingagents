@@ -756,6 +756,9 @@ def package(
             snapshot, extra, (extension_input or {}).get("reader_research"),
             technical=fixed_technical, company=fixed_company,
         )
+        from .valuation_horizons import build as build_horizons
+
+        result["valuation_scenarios"], result["horizon_analysis"] = build_horizons(result, fixed_company)
         result["reader_pdf_requested"] = pdf_font is not None
         audit_page = page
         if fixed_technical is not None:
@@ -785,6 +788,8 @@ def package(
     if audit_page is not None:
         (output / "audit.html").write_text(audit_page, encoding="utf-8")
         write_json(output / "reader-research.json", result["reader_research"])
+        write_json(output / "valuation-scenarios.json", result["valuation_scenarios"])
+        write_json(output / "horizon-analysis.json", result["horizon_analysis"])
         reader_sources = (extension_input or {}).get("reader_research", {}).get("sources", {})
         for source in reader_sources.values():
             target = output / "reader-sources" / (source["sha256"] + ".pdf")
